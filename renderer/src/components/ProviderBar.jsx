@@ -12,7 +12,8 @@ const DAYS = 31;
 const STACK = [
   { id: 'codex', label: 'Codex', color: '#F2A05C' },
   { id: 'kimi', label: 'Kimi', color: '#4ECB94' },
-  { id: 'deepseek', label: 'DeepSeek', color: '#6E94F5' }
+  { id: 'deepseek', label: 'DeepSeek', color: '#6E94F5' },
+  { id: 'opencode', label: 'OpenCode', color: '#C084FC' }
 ];
 
 function lastDays(count) {
@@ -53,7 +54,7 @@ function buildOption(dom, details, dates) {
           const c = cachedByProvider[pid] && Number(cachedByProvider[pid][date]);
           return c > 0 ? '（缓存 ' + formatWan(c) + '）' : '';
         };
-        // 显示顺序与堆叠视觉一致:自上而下 DeepSeek → Kimi → Codex
+        // 显示顺序与堆叠视觉一致:自上而下 OpenCode → DeepSeek → Kimi → Codex
         const parts = STACK.slice().reverse().map((provider) => {
           const p = lookup[provider.label];
           if (!p) return '';

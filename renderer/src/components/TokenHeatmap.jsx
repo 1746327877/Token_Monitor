@@ -11,7 +11,8 @@ const PROVIDER_OPTS = [
   { id: 'all', label: '全部' },
   { id: 'deepseek', label: 'DeepSeek' },
   { id: 'codex', label: 'Codex' },
-  { id: 'kimi', label: 'Kimi' }
+  { id: 'kimi', label: 'Kimi' },
+  { id: 'opencode', label: 'OpenCode' }
 ];
 
 function dateLabel(date) {

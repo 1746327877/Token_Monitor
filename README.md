@@ -2,7 +2,7 @@
 
 > 本仓库为 [DDomelette/TokenMonitor](https://github.com/DDomelette/TokenMonitor) 的衍生仓库,基于原项目(MIT License)修改维护,保留原作者版权声明。
 
-多平台 AI 用量监控桌面悬浮窗 —— 在同一个窗口里实时追踪 **DeepSeek**、**Codex(OpenAI)**、**Kimi** 三家平台的额度、余额与 Token 消耗。
+多平台 AI 用量监控桌面悬浮窗 —— 在同一个窗口里实时追踪 **DeepSeek**、**Codex(OpenAI)**、**Kimi** 三家平台的额度、余额与 Token 消耗,以及 **OpenCode** 本地会话的 Token / 费用使用。
 
 ![主窗口](docs/screenshots/main-window.png)
 
@@ -39,6 +39,7 @@
 | DeepSeek | API Key 查询余额;内置代理会话(首次需登录 DeepSeek 平台)获取用量明细 |
 | Codex | 读取本机 Codex 会话的用量接口 |
 | Kimi | 读取本机 Kimi 会话的用量接口 |
+| OpenCode | 读取本机 opencode 会话消息(storage/message),统计每日 Token / 费用(含 reasoning 与缓存) |
 
 所有数据仅在本地处理,不会上传到任何第三方服务器。
 

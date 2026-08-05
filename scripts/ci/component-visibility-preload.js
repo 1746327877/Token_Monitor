@@ -46,6 +46,12 @@ contextBridge.exposeInMainWorld('api', {
         details: { byProvider: {}, cachedByProvider: {}, deepseekModels: {} }
       });
     }
+    if (channel === 'get:opencode-stats') {
+      return Promise.resolve({
+        today: { date: null, tokens: 0, cost: 0, messages: 0, models: [] },
+        total: { tokens: 0, cost: 0, messages: 0, days: 0 }
+      });
+    }
     if (channel === 'get:bounds') {
       return Promise.resolve({ x: 0, y: 0, width: 760, height: 900 });
     }

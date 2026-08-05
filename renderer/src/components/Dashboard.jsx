@@ -19,6 +19,7 @@ import ChartWidget from './ChartWidget.jsx';
 import QuotaCard from './QuotaCard.jsx';
 import TokenHeatmap from './TokenHeatmap.jsx';
 import ProviderBar from './ProviderBar.jsx';
+import OpenCodeCard from './OpenCodeCard.jsx';
 
 const LABELS = {
   'balance-card': '余额',
@@ -27,7 +28,8 @@ const LABELS = {
   'model-bar': 'DeepSeek 每日 Token 消耗',
   'provider-bar': '每日 Token 消耗',
   'token-line': 'Token 消耗',
-  'cost-line': '费用增长趋势'
+  'cost-line': '费用增长趋势',
+  'opencode-stats-card': 'OpenCode 使用'
 };
 
 const FEE_IDS = ['balance-card', 'today-cost-card', 'cache-rate-card'];
@@ -47,7 +49,8 @@ const MIN_SIZES = {
   'provider-bar': { w: 4, h: 4 },
   'token-line': { w: 4, h: 4 },
   'cost-line': { w: 4, h: 4 },
-  'token-heatmap': { w: 6, h: 10 }
+  'token-heatmap': { w: 6, h: 10 },
+  'opencode-stats-card': { w: 4, h: 3 }
 };
 
 function WidgetBody({ id, onContentChange }) {
@@ -76,6 +79,9 @@ function WidgetBody({ id, onContentChange }) {
   }
   if (id === 'provider-bar') {
     return <ProviderBar />;
+  }
+  if (id === 'opencode-stats-card') {
+    return <OpenCodeCard />;
   }
   return <ChartWidget id={id} dashboard={dashboard} />;
 }

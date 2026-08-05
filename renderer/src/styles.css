@@ -316,6 +316,36 @@ body,
   line-height: 1.35;
 }
 
+.opencode-model-list {
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 5px;
+  overflow: hidden;
+}
+
+.opencode-model-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: clamp(9px, 7cqw, 11px);
+  line-height: 1.4;
+}
+
+.opencode-model-name {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.opencode-model-value {
+  color: var(--text-primary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .chart-container {
   flex: 1;
   min-height: 0;

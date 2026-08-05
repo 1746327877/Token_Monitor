@@ -13,6 +13,10 @@ export function getHeatmap(arg) {
   return api.invoke('get:heatmap', arg);
 }
 
+export function getOpenCodeStats() {
+  return api.invoke('get:opencode-stats');
+}
+
 export function getBounds() {
   return api.invoke('get:bounds');
 }

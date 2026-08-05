@@ -86,6 +86,16 @@ module.exports = function setupIPC(deps) {
     return deps.scheduler.getSnapshot();
   });
 
+  /* ======== OpenCode 使用卡片 ======== */
+
+  ipcMain.handle('get:opencode-stats', () => {
+    const provider = deps.registry.get('opencode');
+    if (!provider || typeof provider.getStats !== 'function') {
+      return { today: { date: null, tokens: 0, cost: 0, messages: 0, models: [] }, total: { tokens: 0, cost: 0, messages: 0, days: 0 } };
+    }
+    return provider.getStats({ store: deps.store, logger: console });
+  });
+
   /* ======== Heatmap ======== */
 
   ipcMain.handle('get:heatmap', (event, arg) => {

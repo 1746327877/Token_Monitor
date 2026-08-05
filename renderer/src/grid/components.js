@@ -226,6 +226,27 @@ const components = [
       compact: { x: 0, y: 42, w: 12, h: 10, preset: 'full' },
       wide: { x: 0, y: 42, w: 12, h: 10, preset: 'full' }
     }
+  },
+  {
+    id: 'opencode-stats-card',
+    label: 'OpenCode 使用',
+    settingsKey: 'components.opencodeStatsCard',
+    defaultVisible: true,
+    aspectRatio: 1,
+    presets: {
+      compact: [
+        { name: 'card', w: 4, h: 4 },
+        { name: 'wide', w: 6, h: 4 }
+      ],
+      wide: [
+        { name: 'card', w: 4, h: 4 },
+        { name: 'wide', w: 6, h: 4 }
+      ]
+    },
+    defaultPlacement: {
+      compact: { x: 0, y: 52, w: 4, h: 4, preset: 'card' },
+      wide: { x: 0, y: 52, w: 4, h: 4, preset: 'card' }
+    }
   }
 ];
 

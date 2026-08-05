@@ -162,6 +162,27 @@
         compact: { x: 0, y: 22, w: 12, h: 6, preset: 'full' },
         wide: { x: 0, y: 22, w: 12, h: 6, preset: 'full' }
       }
+    },
+    {
+      id: 'opencode-stats-card',
+      label: 'OpenCode 使用',
+      settingsKey: 'components.opencodeStatsCard',
+      defaultVisible: true,
+      aspectRatio: 1,
+      presets: {
+        compact: [
+          { name: 'card', w: 4, h: 4 },
+          { name: 'wide', w: 6, h: 4 }
+        ],
+        wide: [
+          { name: 'card', w: 4, h: 4 },
+          { name: 'wide', w: 6, h: 4 }
+        ]
+      },
+      defaultPlacement: {
+        compact: { x: 0, y: 28, w: 4, h: 4, preset: 'card' },
+        wide: { x: 0, y: 28, w: 4, h: 4, preset: 'card' }
+      }
     }
   ];
   var runtime = Object.create(null);
