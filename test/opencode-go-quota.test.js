@@ -66,12 +66,13 @@ test('parseQuota returns null for empty or unusable payloads', () => {
 test('buildHeaders merges captured origin/referer/UA with cookie', () => {
   const headers = buildHeaders({
     cookie: 'session=abc',
-    headers: { origin: 'https://opencode.ai', referer: 'https://opencode.ai/workspace/x/go', 'user-agent': 'Mozilla' }
+    headers: { origin: 'https://opencode.ai', referer: 'https://opencode.ai/workspace/x/go', 'user-agent': 'Mozilla', 'x-solidstart-media-type': 'application/json' }
   });
   assert.equal(headers['Cookie'], 'session=abc');
   assert.equal(headers.origin, 'https://opencode.ai');
   assert.equal(headers.referer, 'https://opencode.ai/workspace/x/go');
   assert.equal(headers['user-agent'], 'Mozilla');
+  assert.equal(headers['x-solidstart-media-type'], 'application/json');
 });
 
 test('fetchQuota returns null without captured credentials', async () => {

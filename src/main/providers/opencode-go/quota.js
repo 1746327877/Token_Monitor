@@ -44,12 +44,15 @@ function parseQuota(data) {
   return makeQuotaState('opencode-go', 'subscription', windows, null, 'OpenCode Go', null, Date.now());
 }
 
-// 重放时合并 Cookie 与捕获到的来源头。
+// 重放时合并 Cookie 与捕获到的来源头(content-type/accept/origin/referer/UA 等)。
 function buildHeaders(cred) {
   const headers = {};
   if (cred && cred.headers) {
-    ['origin', 'referer', 'user-agent'].forEach((k) => {
+    ['origin', 'referer', 'user-agent', 'accept', 'content-type'].forEach((k) => {
       if (cred.headers[k]) headers[k] = cred.headers[k];
+    });
+    Object.keys(cred.headers).forEach((k) => {
+      if (/^x-/i.test(k)) headers[k] = cred.headers[k];
     });
   }
   if (cred && cred.cookie) headers['Cookie'] = cred.cookie;

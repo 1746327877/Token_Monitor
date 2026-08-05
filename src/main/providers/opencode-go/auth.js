@@ -4,7 +4,7 @@
 const { BrowserWindow } = require('electron');
 const { parseQuota, CRED_KEY } = require('./quota');
 
-const CONSOLE_URL = 'https://opencode.ai/workspace';
+const CONSOLE_URL = 'https://opencode.ai/auth';
 const QUERY_NAME = 'lite.subscription.get';
 
 function createSessionWindow() {
@@ -44,11 +44,17 @@ function bodyFromUpload(uploadData) {
   return text;
 }
 
-// 捕获重放所需的来源头(排除 hop-by-hop 与 body 相关)。
+// 捕获重放所需的请求头:保留 cookie/origin/referer/UA/content-type/accept 与 x-* 自定义头,
+// 排除 hop-by-hop(host/content-length/connection 等)与压缩协商头。
+const HOP_BY_HOP = /^(host|content-length|connection|keep-alive|transfer-encoding|accept-encoding|upgrade|pragma|cache-control|sec-fetch-|sec-ch-ua|te)$/i;
 function pickHeaders(headers) {
   const picked = {};
-  ['origin', 'referer', 'user-agent'].forEach((k) => {
-    if (headers && headers[k]) picked[k] = headers[k];
+  Object.keys(headers || {}).forEach((k) => {
+    const lk = k.toLowerCase();
+    if (HOP_BY_HOP.test(lk)) return;
+    if (/^x-/.test(lk) || ['cookie', 'origin', 'referer', 'user-agent', 'accept', 'content-type'].indexOf(lk) !== -1) {
+      picked[k] = headers[k];
+    }
   });
   return picked;
 }
@@ -109,24 +115,27 @@ function captureSession(ctx) {
       callback({ requestHeaders: details.requestHeaders });
     });
 
-    // 已登录落地到 workspace 页后,自动跳到 Go 订阅页以触发用量请求
+    // 已登录落地到 workspace 页后,自动跳到 Go 订阅页以触发用量请求(保留语言前缀)
     win.webContents.on('did-navigate', (e, url) => {
-      const m = /workspace\/([^/?#]+)/.exec(url);
+      logger.log('[opencode-go] navigate:', url);
+      const m = /(.*\/workspace\/[^/?#]+)/.exec(url);
       if (!m) return;
-      try {
-        const pathname = new URL(url).pathname;
-        if (!/^\/workspace\/[^/]+\/go/.test(pathname)) {
-          win.loadURL('https://opencode.ai/workspace/' + m[1] + '/go');
-        }
-      } catch (err) {}
+      if (!/\/go(\/|$)/.test(m[1])) {
+        logger.log('[opencode-go] goto go page:', m[1] + '/go');
+        win.loadURL(m[1] + '/go');
+      }
     });
 
-    // 捕获到请求后,页面内重放 fetch 拿真实 JSON(自动携带 cookie)
+    // 捕获到请求后,页面内重放 fetch 拿真实 JSON(自动携带 cookie,排除浏览器禁止手动设置的 cookie 头)
     function replay() {
       if (settled || !found) return;
       const bodyLiteral = JSON.stringify(found.requestBody);
+      const replayHeaders = Object.assign({ 'Content-Type': 'application/json' }, found.headers || {});
+      delete replayHeaders.cookie;
+      delete replayHeaders.Cookie;
+      const headersLiteral = JSON.stringify(replayHeaders);
       win.webContents.executeJavaScript(
-        'fetch(' + JSON.stringify(found.url) + ',{method:"POST",headers:{"Content-Type":"application/json"},body:' + bodyLiteral + '}).then(r=>r.text())'
+        'fetch(' + JSON.stringify(found.url) + ',{method:"POST",headers:' + headersLiteral + ',body:' + bodyLiteral + '}).then(r=>r.text())'
       )
         .then((text) => {
           let parsed = null;
@@ -157,6 +166,7 @@ function captureSession(ctx) {
     });
 
     win.webContents.on('did-fail-load', (event, code, desc) => {
+      logger.log('[opencode-go] did-fail-load:', code, desc);
       if (!settled) fail(new Error('登录窗口加载失败: ' + desc));
     });
     win.on('closed', () => {
