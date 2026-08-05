@@ -1,0 +1,123 @@
+const { initializeStore } = require('./core/store-recovery');
+const settingsSecurity = require('./core/settings-security');
+
+const defaults = {
+  providers: {
+    deepseek: {
+      apiKey: '',
+      sessionToken: ''
+    },
+    proxyUrl: 'http://127.0.0.1:7890'
+  },
+  window: {
+    x: undefined,
+    y: undefined,
+    width: 420,
+    height: 680,
+    opacity: 92,
+    alwaysOnTop: true,
+    autoLaunch: false,
+    followSystemTheme: true,
+    layoutLocked: true
+  },
+  components: {
+    balanceCard: true,
+    todayCostCard: true,
+    cacheRateCard: true,
+    modelBar: true,
+    providerBar: true,
+    tokenLine: true,
+    costLine: true
+  },
+  layout: null,
+  componentOrder: [
+    'balance-card',
+    'today-cost-card',
+    'cache-rate-card',
+    'model-bar',
+    'provider-bar',
+    'token-line',
+    'cost-line'
+  ],
+  data: {
+    sampleInterval: 30,
+    defaultTimeRange: '1h',
+    proxyPort: 7890,
+    historyDays: 7
+  }
+};
+
+let storeInstance = null;
+
+function createStore(options = {}) {
+  const StoreClass = options.StoreClass || require('electron-store');
+  return initializeStore({
+    StoreClass,
+    userDataDir: options.userDataDir,
+    defaults: options.defaults || defaults,
+    fsImpl: options.fsImpl,
+    cryptoImpl: options.cryptoImpl,
+    now: options.now
+  });
+}
+
+function initialize(options = {}) {
+  if (storeInstance) return storeInstance;
+  storeInstance = createStore(options);
+  return storeInstance;
+}
+
+function requireStoreInstance() {
+  if (storeInstance) return storeInstance;
+  const error = new Error('Store has not been initialized.');
+  error.code = 'STORE_NOT_INITIALIZED';
+  throw error;
+}
+
+// 旧键 → provider 命名空间键的一次性迁移。storeLike 可为真实 electron-store 或纯对象。
+function migrateLegacyKeys(storeLike) {
+  let migrated = false;
+  const oldSession = storeLike.get('sessionToken');
+  if (oldSession && !storeLike.get('providers.deepseek.sessionToken')) {
+    storeLike.set('providers.deepseek.sessionToken', oldSession);
+    migrated = true;
+  }
+  const oldApiKey = storeLike.get('apiKey');
+  if (oldApiKey && !storeLike.get('providers.deepseek.apiKey')) {
+    storeLike.set('providers.deepseek.apiKey', oldApiKey);
+    migrated = true;
+  }
+  if (storeLike.get('providers.deepseek.sessionToken')) storeLike.delete('sessionToken');
+  if (storeLike.get('providers.deepseek.apiKey')) storeLike.delete('apiKey');
+  return migrated;
+}
+
+const facade = {
+  createStore,
+  defaults,
+  initialize,
+  migrateLegacyKeys,
+  ...settingsSecurity
+};
+
+module.exports = new Proxy(facade, {
+  get(target, property, receiver) {
+    if (Object.prototype.hasOwnProperty.call(target, property)) {
+      return Reflect.get(target, property, receiver);
+    }
+    const instance = requireStoreInstance();
+    const value = Reflect.get(instance, property, instance);
+    return typeof value === 'function' ? value.bind(instance) : value;
+  },
+  set(target, property, value, receiver) {
+    if (Object.prototype.hasOwnProperty.call(target, property)) {
+      return Reflect.set(target, property, value, receiver);
+    }
+    const instance = requireStoreInstance();
+    return Reflect.set(instance, property, value, instance);
+  },
+  has(target, property) {
+    return Object.prototype.hasOwnProperty.call(target, property)
+      || (storeInstance ? Reflect.has(storeInstance, property) : false);
+  }
+});

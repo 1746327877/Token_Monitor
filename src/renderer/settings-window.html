@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+<title>设置</title>
+<link rel="stylesheet" href="css/main.css">
+<style>
+  .settings-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0 14px 14px;
+  }
+  .settings-body::-webkit-scrollbar {
+    width: 10px;
+  }
+  .settings-body::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .settings-body::-webkit-scrollbar-thumb {
+    background: transparent;
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
+    transition: background 160ms ease-out;
+  }
+  .settings-body:hover::-webkit-scrollbar-thumb,
+  .settings-body.is-scrolling::-webkit-scrollbar-thumb {
+    background: var(--border);
+    background-clip: content-box;
+  }
+  .settings-body::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+    background-clip: content-box;
+  }
+  .settings-section {
+    margin-bottom: 18px;
+  }
+  .settings-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0;
+    color: var(--text-secondary);
+    margin-top: 10px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+  }
+  .setting-row.vertical {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .setting-label {
+    font-size: 13px;
+    color: var(--text-primary);
+  }
+  .session-status {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .toggle-switch {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+    border-radius: 22px;
+    cursor: pointer;
+    transition: all 200ms ease-out;
+  }
+  .toggle-slider::before {
+    content: '';
+    position: absolute;
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: all 200ms ease-out;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  }
+  .toggle-switch input:checked + .toggle-slider { background: var(--primary); }
+  .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
+  .slider-input {
+    width: 100%;
+    -webkit-appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    outline: none;
+  }
+  .slider-input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--primary);
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(116, 184, 252, 0.3);
+  }
+  .slider-value { font-size: 12px; color: var(--text-secondary); margin-left: 8px; min-width: 32px; text-align: right; }
+  .select-input {
+    font-size: 13px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    outline: none;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 200ms ease-out;
+  }
+  .select-input:hover,
+  .select-input:focus {
+    border-color: var(--primary);
+  }
+  .select-input:focus {
+    box-shadow: 0 0 0 2px rgba(116, 184, 252, 0.15);
+  }
+  .custom-select {
+    position: relative;
+  }
+  .custom-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 116px;
+    font-size: 13px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    outline: none;
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color 200ms ease-out, box-shadow 200ms ease-out;
+  }
+  .custom-select-trigger:hover,
+  .custom-select.open .custom-select-trigger {
+    border-color: var(--primary);
+  }
+  .custom-select.open .custom-select-trigger {
+    box-shadow: 0 0 0 2px rgba(116, 184, 252, 0.15);
+  }
+  .custom-select-trigger svg {
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .custom-select.open .custom-select-trigger svg {
+    transform: rotate(180deg);
+  }
+  .custom-select-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    box-shadow: 0 6px 20px rgba(31, 41, 55, 0.12);
+    z-index: 100;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(-6px) scaleY(0.86);
+    transform-origin: top center;
+    pointer-events: none;
+    /* 收回:较慢的阻尼感 */
+    transition:
+      opacity 240ms cubic-bezier(0.55, 0, 0.55, 0.2),
+      transform 300ms cubic-bezier(0.55, 0, 0.55, 0.2);
+  }
+  .custom-select.open .custom-select-menu {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+    pointer-events: auto;
+    /* 展开:较快、带轻微回弹的阻尼感 */
+    transition:
+      opacity 160ms ease-out,
+      transform 230ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .custom-select-option {
+    padding: 7px 10px;
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background 120ms ease-out;
+  }
+  .custom-select-option:hover {
+    background: rgba(116, 184, 252, 0.12);
+  }
+  .custom-select-option.selected {
+    color: var(--primary);
+    font-weight: 500;
+  }
+  /* 向上展开(空间不足时):从触发器上缘划出 */
+  .custom-select.drop-up .custom-select-menu {
+    top: auto;
+    bottom: calc(100% + 4px);
+    transform: translateY(6px) scaleY(0.86);
+    transform-origin: bottom center;
+  }
+  .custom-select.drop-up.open .custom-select-menu {
+    transform: translateY(0) scaleY(1);
+  }
+  .text-input {
+    font-size: 13px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    outline: none;
+    font-family: inherit;
+    width: 100%;
+    box-sizing: border-box;
+    transition: all 200ms ease-out;
+  }
+  .text-input:hover,
+  .text-input:focus {
+    border-color: var(--primary);
+  }
+  .text-input:focus {
+    box-shadow: 0 0 0 2px rgba(116, 184, 252, 0.15);
+  }
+  .settings-footer {
+    display: flex;
+    gap: 8px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--border);
+    justify-content: flex-end;
+    flex-shrink: 0;
+  }
+  .btn {
+    font-size: 13px;
+    padding: 6px 16px;
+    border-radius: var(--radius-btn);
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 500;
+    transition: all 200ms ease-out;
+  }
+  .btn-secondary { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--primary); color: var(--primary); }
+  .btn-primary { background: var(--primary); color: var(--text-inverse); }
+  .btn-primary:hover { background: var(--primary-light); }
+</style>
+</head>
+<body>
+  <div class="resize-layer">
+    <div class="resize-handle resize-n"></div>
+    <div class="resize-handle resize-s"></div>
+    <div class="resize-handle resize-e"></div>
+    <div class="resize-handle resize-w"></div>
+    <div class="resize-handle resize-ne"></div>
+    <div class="resize-handle resize-nw"></div>
+    <div class="resize-handle resize-se"></div>
+    <div class="resize-handle resize-sw"></div>
+  </div>
+  <div id="app">
+    <div class="titlebar">
+      <div class="titlebar-left">
+        <span class="titlebar-text">设置</span>
+      </div>
+      <div class="titlebar-actions">
+        <button class="titlebar-btn" id="settingsCloseBtn" title="关闭">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        </button>
+      </div>
+    </div>
+    <div class="settings-body" id="settingsBody"></div>
+    <div class="settings-footer">
+      <button class="btn btn-secondary" id="resetBtn">恢复默认</button>
+      <button class="btn btn-primary" id="settingsDoneBtn">关闭</button>
+    </div>
+  </div>
+<script src="js/layout/component-registry.js"></script>
+<script src="js/settings-definitions.js"></script>
+<script src="js/settings-window.js"></script>
+</body>
+</html>

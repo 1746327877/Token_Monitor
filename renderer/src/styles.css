@@ -1,0 +1,713 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* 透明页面背景:透出 DWM acrylic 磨砂(非分层窗口,缩放不会露黑) */
+  background: transparent;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  color: #1f2329;
+  user-select: none;
+}
+
+/* 缩放手柄层, 与旧版 class 完全一致(行为由 Task 8 的 ResizeHandles 恢复) */
+.resize-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.resize-handle {
+  position: absolute;
+  pointer-events: auto;
+}
+
+.resize-n { top: 0; left: 8px; right: 8px; height: 6px; cursor: n-resize; }
+.resize-s { bottom: 0; left: 8px; right: 8px; height: 6px; cursor: s-resize; }
+.resize-e { right: 0; top: 8px; bottom: 8px; width: 6px; cursor: e-resize; }
+.resize-w { left: 0; top: 8px; bottom: 8px; width: 6px; cursor: w-resize; }
+.resize-ne { top: 0; right: 0; width: 12px; height: 12px; cursor: ne-resize; }
+.resize-nw { top: 0; left: 0; width: 12px; height: 12px; cursor: nw-resize; }
+.resize-se { bottom: 0; right: 0; width: 12px; height: 12px; cursor: se-resize; }
+.resize-sw { bottom: 0; left: 0; width: 12px; height: 12px; cursor: sw-resize; }
+
+#app {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  /* 半透明白底:透出少量 acrylic 磨砂,同时保证画面明亮不偏灰 */
+  background: rgba(246, 247, 249, 0.93);
+  /* 圆角由 DWM 合成层统一裁剪, CSS 不再画圆角 */
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 34px;
+  padding: 0 8px 0 12px;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+
+.titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.titlebar-logo {
+  width: 14px;
+  height: 16px;
+  display: inline-block;
+}
+
+.titlebar-text {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.content {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  /* 让出右侧缩放手柄(.resize-e 6px)的位置:滚动条不再与窗口缩放手柄重叠 */
+  margin-right: 6px;
+}
+
+/* 细滚动条,覆盖原生样式以去掉两端的箭头按钮 */
+.content::-webkit-scrollbar {
+  width: 10px;
+}
+.content::-webkit-scrollbar-track {
+  background: transparent;
+}
+.content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.16);
+  border-radius: 4px;
+}
+.content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.28);
+}
+.content::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* 拖拽换位时的占位块:与卡片同样的圆角 */
+.grid-stack > .grid-stack-placeholder > .placeholder-content {
+  border-radius: var(--radius-card);
+}
+
+.placeholder {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8a919f;
+  font-size: 13px;
+}
+
+/* ======== 标题栏按钮 ======== */
+.titlebar-actions {
+  display: flex;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: #5b6372;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease, box-shadow 0.2s ease;
+}
+
+.titlebar-btn svg {
+  display: block;
+}
+
+.titlebar-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #1f2329;
+}
+
+/* 按压回弹 */
+.titlebar-btn:active {
+  transform: scale(0.85);
+}
+
+/* 布局编辑激活态:实心主题色 + 白图标,明确区分"编排中" */
+.titlebar-btn-layout.active {
+  background: var(--primary, #74b8fc);
+  color: #fff;
+  box-shadow: 0 1px 6px rgba(116, 184, 252, 0.55);
+}
+
+.titlebar-btn-layout.active:hover {
+  background: var(--primary-dark, #5a9fe0);
+  color: #fff;
+}
+
+/* 点击小动画:刷新转一整圈,设置齿轮轻转回弹 */
+.titlebar-btn.spin-refresh svg {
+  animation: tb-spin 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.titlebar-btn.spin-gear svg {
+  animation: tb-gear 0.4s ease;
+}
+
+@keyframes tb-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes tb-gear {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ======== 状态栏 ======== */
+.statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  font-size: 11px;
+  color: #8a919f;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  display: inline-block;
+}
+
+.status-dot.online {
+  background: #22c55e;
+}
+
+.status-dot.offline {
+  background: #ef4444;
+}
+
+/* ======== 透明窗口时代遗留:非透明窗口 + DWM 圆角后不再需要在拖动时切直角 ======== */
+
+/* ======== CSS 变量(从旧 main.css 平移) ======== */
+:root {
+  --primary: #74B8FC;
+  --primary-light: #95CAFF;
+  --primary-dark: #5A9FE0;
+  --bg-window: rgba(255, 255, 255, 0.92);
+  --bg-window-dark: rgba(30, 32, 38, 0.92);
+  --bg-card: #F8F9FC;
+  --bg-card-dark: #252730;
+  --text-primary: #1A1A2E;
+  --text-secondary: #6B7280;
+  --text-inverse: #FFFFFF;
+  --border: #E5E7EB;
+  --border-dark: #3A3C45;
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --error: #EF4444;
+  --radius-window: 16px;
+  --radius-card: 12px;
+  --radius-btn: 8px;
+  --radius-input: 8px;
+  --shadow-window: 0 4px 24px rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* ======== 仪表盘组件 ======== */
+.component-wrapper {
+  touch-action: none;
+}
+
+/* gridstack 内容是绝对定位(top/bottom 由 --gs-item-margin-* 撑开),
+   不能再设 height/min-height:100%,否则会覆盖 bottom、向下溢出 8px 顶掉纵向间距 */
+.component-surface {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 8px 10px;
+  overflow: hidden;
+  container-type: inline-size;
+}
+
+.component-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  flex-shrink: 0;
+}
+
+.fee-card-surface {
+  /* 渐变叠加在实色卡片底上,避免窗口半透明时透出底色、与其他卡片风格不一致 */
+  background: linear-gradient(135deg, rgba(116, 184, 252, 0.04), rgba(149, 202, 255, 0.02)), var(--bg-card);
+  transition: all 200ms ease-out;
+  cursor: default;
+}
+
+.fee-card-surface:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
+  background: linear-gradient(135deg, rgba(116, 184, 252, 0.08), rgba(149, 202, 255, 0.04)), var(--bg-card);
+}
+
+.fee-card-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.fee-card-value-wrap {
+  min-width: 0;
+}
+
+.fee-card-value {
+  font-size: clamp(13px, 16cqw, 30px);
+  font-weight: 700;
+  line-height: 1.2;
+  transition: color 300ms ease-out;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fee-card-value.primary { color: var(--primary); }
+.fee-card-value.warning { color: var(--warning); }
+.fee-card-value.error { color: var(--error); }
+
+.fee-card-sub {
+  font-size: clamp(9px, 7.5cqw, 12px);
+  color: var(--text-secondary);
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+.chart-container {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+/* gridstack 基础覆写:隐藏默认边框,内容占满(margin 由 --gs-item-margin-* 变量生效,勿再 inset:0 覆盖) */
+.grid-stack {
+  background: transparent;
+}
+
+/* 编辑模式拖拽柄:移动模块的唯一抓手,避免抓边框缩放时误触发移动 */
+.module-drag-handle {
+  display: none;
+}
+
+.grid-stack.editing .module-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 56px;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(116, 184, 252, 0.18);
+  border: 1px solid rgba(116, 184, 252, 0.45);
+  cursor: grab;
+  /* 必须压过 gridstack 缩放手柄的 z-index:100,否则拖拽柄被 n 手柄盖住点不到 */
+  z-index: 110;
+}
+
+.module-drag-handle::before {
+  content: '•••';
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--primary);
+  line-height: 1;
+}
+
+.grid-stack.editing .module-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* 编辑模式下加大缩放手柄的命中区域,更好抓 */
+.grid-stack.editing .grid-stack-item > .ui-resizable-n,
+.grid-stack.editing .grid-stack-item > .ui-resizable-s {
+  height: 10px;
+}
+
+.grid-stack.editing .grid-stack-item > .ui-resizable-e,
+.grid-stack.editing .grid-stack-item > .ui-resizable-w {
+  width: 10px;
+}
+
+/* 优先级须压过 gridstack.min.css 的 .grid-stack-item > .grid-stack-item-content{overflow-y:auto}:
+   溢出由 Dashboard 的自动撑高处理,瞬时溢出宁可裁切也不显示滚动条 */
+.grid-stack > .grid-stack-item > .grid-stack-item-content {
+  overflow: hidden;
+}
+
+/* ======== 订阅制额度卡片 ======== */
+.quota-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 8px 10px;
+  font-size: 11px;
+}
+
+/* 嵌入 grid 板块时:外层 component-surface 已提供卡片外观,内层去掉重复边框/底色 */
+.embed-surface .quota-card {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+.embed-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.quota-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.quota-card-plan {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.quota-card-plan-sub {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+/* 套餐徽标:仿 Codex 原版 Pro 小胶囊 */
+.quota-card-plan-badge {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: var(--bg-card);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+/* Kimi 套餐名:仿 Kimi 官网定价页的衬线字体(Playfair Display 风格),不加胶囊框 */
+.quota-card-plan-kimi {
+  font-family: 'Playfair Display', 'Noto Serif', Georgia, 'Times New Roman', serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.quota-window {
+  margin-bottom: 8px;
+}
+
+.quota-window-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.quota-window-kind {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.quota-window-used {
+  color: var(--text-secondary);
+}
+
+.quota-bar {
+  height: 6px;
+  background: rgba(116, 184, 252, 0.12);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.quota-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 300ms ease-out;
+}
+
+.quota-bar-fill.low { background: var(--success); }
+.quota-bar-fill.mid { background: var(--warning); }
+.quota-bar-fill.high { background: var(--error); }
+
+/* 剩余为 0:斜纹填满整条,直观表示耗尽 */
+.quota-bar-fill.empty {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--error) 0,
+    var(--error) 6px,
+    rgba(239, 68, 68, 0.2) 6px,
+    rgba(239, 68, 68, 0.2) 12px
+  );
+}
+
+.quota-window-reset {
+  margin-top: 4px;
+  color: var(--text-secondary);
+}
+
+.quota-card-cycle {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.quota-empty-text {
+  color: var(--text-secondary);
+}
+
+.quota-expired .quota-reauth-btn {
+  width: 100%;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-btn);
+  background: var(--primary);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.quota-reauth-hint {
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+/* ======== Token 活动热力图 ======== */
+.heatmap-widget {
+  width: 100%;
+}
+
+.heatmap-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.heatmap-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.heatmap-providers,
+.heatmap-modes {
+  display: flex;
+  gap: 4px;
+}
+
+.heatmap-tab {
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.heatmap-tab.active {
+  background: rgba(116, 184, 252, 0.16);
+  color: var(--primary-dark);
+  font-weight: 600;
+}
+
+.heatmap-modes {
+  margin-bottom: 8px;
+}
+
+.heatmap-local-only {
+  font-size: 10px;
+  color: var(--warning);
+  margin-left: 6px;
+  align-self: center;
+}
+
+.heatmap-grid {
+  display: flex;
+  gap: 2px;
+}
+
+.heatmap-grid-daily .heatmap-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.heatmap-cell {
+  border-radius: 2px;
+}
+
+.heatmap-grid-weekly {
+  width: max-content;
+}
+
+.heatmap-grid-cumulative {
+  align-items: flex-end;
+  height: 62px;
+}
+
+.heatmap-cum-bar {
+  width: 14px;
+  border-radius: 2px 2px 0 0;
+}
+
+.heatmap-months {
+  display: flex;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.heatmap-month-cell {
+  font-size: 10px;
+  color: var(--text-secondary);
+  position: relative;
+  height: 14px;
+}
+
+/* 标签宽度与列宽解耦,自由溢出到相邻空列;最后一列右对齐,避免"月"被卡片右缘裁掉 */
+.heatmap-month-text {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+}
+
+.heatmap-month-text.last {
+  left: auto;
+  right: 0;
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.heatmap-legend-cell {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/* 自定义悬停提示:原生 title 在透明窗口不显示 */
+.heatmap-tooltip {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  background: rgba(30, 32, 38, 0.95);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  pointer-events: none;
+  z-index: 10000;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transition: left 0.12s ease-out, top 0.12s ease-out, opacity 0.26s ease-out;
+  animation: heatmap-tip-in 260ms ease-out;
+}
+
+@keyframes heatmap-tip-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.heatmap-tooltip.fading {
+  opacity: 0;
+  transition: left 0.12s ease-out, top 0.12s ease-out, opacity 0.32s ease-in-out;
+}
+
+.heatmap-tooltip-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 2px;
+}
+
+.heatmap-tooltip-date {
+  font-weight: 600;
+}
+
+/* 头部右侧总消耗量 */
+.heatmap-tooltip-total {
+  font-weight: 600;
+  color: #9fd0fd;
+  white-space: nowrap;
+}
+
+.heatmap-tooltip.below {
+  transform: translate(-50%, 0);
+}
+
+.heatmap-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.heatmap-tooltip-label {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+
+
+

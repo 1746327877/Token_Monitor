@@ -1,0 +1,25 @@
+{
+  "name": "deepseek-monitor",
+  "version": "1.0.0",
+  "description": "DeepSeek API 用量监控悬浮窗",
+  "main": "src/main/bootstrap.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "build:win": "npm run build:renderer && electron-builder --win",
+    "build:mac": "npm run build:renderer && electron-builder --mac",
+    "build:renderer": "npm --prefix renderer run build",
+    "dev:renderer": "npm --prefix renderer run dev"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "echarts": "^5.5.0",
+    "electron-store": "^8.1.0",
+    "gridstack": "^12.3.3"
+  },
+  "devDependencies": {
+    "electron": "^40.0.0",
+    "electron-builder": "^24.9.0"
+  }
+}
