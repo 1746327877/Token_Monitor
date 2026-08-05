@@ -73,7 +73,10 @@ async function fetchQuota(ctx) {
   if (!cred || !cred.url || !cred.cookie || !cred.requestBody) return null;
   let body;
   try { body = JSON.parse(cred.requestBody); } catch (e) { return null; }
-  const data = await ctx.httpPostJson(cred.url, body, buildHeaders(cred), ctx.getProxyUrl());
+  const post = (ctx && typeof ctx.httpPostJson === 'function')
+    ? ctx.httpPostJson
+    : require('../../core/http').httpPostJson;
+  const data = await post(cred.url, body, buildHeaders(cred), ctx && ctx.getProxyUrl ? ctx.getProxyUrl() : null);
   return parseQuota(data);
 }
 

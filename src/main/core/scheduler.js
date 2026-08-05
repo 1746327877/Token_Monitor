@@ -1,6 +1,6 @@
 // 多 Provider 调度器:每 provider 按 capability 独立定时器轮询 usage/quota/balance。
 // 401/403/expired 类错误 → authStatus='expired' → broadcast('providers:changed', 全量快照)。
-const { httpGet } = require('./http');
+const { httpGet, httpPostJson } = require('./http');
 
 const DEFAULT_INTERVALS = { usage: 10 * 1000, quota: 60 * 1000, balance: 60 * 1000, localLog: 60 * 1000 };
 
@@ -23,6 +23,7 @@ function startScheduler({ registry, store, broadcast, intervals, onStateChange }
     return {
       store: store,
       httpGet: httpGet,
+      httpPostJson: httpPostJson,
       getProxyUrl: getProxyUrl,
       logger: console
     };
