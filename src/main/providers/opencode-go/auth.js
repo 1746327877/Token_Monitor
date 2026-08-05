@@ -104,9 +104,9 @@ function captureSession(ctx) {
       reject(err);
     };
 
-    // 捕获所有 _server 请求的 URL / body / Cookie / 来源头
+    // 捕获所有发往 opencode.ai 的 POST(server function 路径不限于 /_server,先全收再逐个重放)
     ses.webRequest.onBeforeSendHeaders((details, callback) => {
-      if (details.method === 'POST' && details.url.indexOf('/_server') !== -1) {
+      if (details.method === 'POST' && /^https:\/\/opencode\.ai\//.test(details.url)) {
         lastActivity = Date.now();
         const body = bodyFromUpload(details.requestBody && details.requestBody.uploadData);
         captures.push({
@@ -115,7 +115,7 @@ function captureSession(ctx) {
           cookie: details.requestHeaders['cookie'] || '',
           headers: pickHeaders(details.requestHeaders)
         });
-        logger.log('[opencode-go] captured _server POST:', details.url, '| body:', body.slice(0, 160));
+        logger.log('[opencode-go] captured POST:', details.url, '| body:', body.slice(0, 160));
       }
       callback({ requestHeaders: details.requestHeaders });
     });
@@ -181,7 +181,7 @@ function captureSession(ctx) {
     }
 
     ses.webRequest.onCompleted((details) => {
-      if (!settled && details.method === 'POST' && details.url.indexOf('/_server') !== -1) {
+      if (!settled && details.method === 'POST' && /^https:\/\/opencode\.ai\//.test(details.url)) {
         scheduleReplay();
       }
     });
@@ -194,16 +194,19 @@ function captureSession(ctx) {
         logger.log('[opencode-go] no _server request captured for 120s, last activity:', new Date(lastActivity).toISOString());
       }
     }, 30000);
-    scheduleReplay();
 
     win.webContents.on('did-fail-load', (event, code, desc) => {
       logger.log('[opencode-go] did-fail-load:', code, desc);
       if (!settled) fail(new Error('登录窗口加载失败: ' + desc));
     });
     win.on('closed', () => {
-      if (!settled) fail(new Error('未捕获到 OpenCode Go 用量接口(请登录并进入 Go 订阅页)'));
+      if (!settled) {
+        logger.log('[opencode-go] window closed without capture');
+        fail(new Error('未捕获到 OpenCode Go 用量接口(请登录并进入 Go 订阅页)'));
+      }
     });
 
+    logger.log('[opencode-go] capture session start ->', CONSOLE_URL);
     win.loadURL(CONSOLE_URL);
   });
 }
