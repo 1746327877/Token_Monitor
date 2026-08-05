@@ -26,9 +26,16 @@ function windowFromPercent(kind, name, percent, resetInSec, limit) {
   };
 }
 
-// 归一化 lite.subscription.get 响应(纯函数)。兼容 { result } 包装与裸对象。
+// 归一化 lite.subscription.get 响应(纯函数)。兼容常见 wrapper({ result }/{ data }/裸对象)。
+function unwrap(data) {
+  if (!data) return null;
+  if (data && data.result) return data.result;
+  if (data && data.data) return data.data;
+  return data;
+}
+
 function parseQuota(data) {
-  const result = data && (data.result || data);
+  const result = unwrap(data);
   if (!result) return null;
   const windows = [];
   if (result.rollingUsage) {

@@ -70,6 +70,8 @@ function extractWorkspace(requestBody) {
 }
 
 // 登录捕获:成功 resolve 归一化后的 QuotaState,并已写入 store。
+// 策略:收集窗口内所有发往 /_server 的 POST(不限函数名位置,body 或 URL 均可),
+// 页面加载完成后逐个在页内重放,直到解析出 lite.subscription.get 的用量结构。
 function captureSession(ctx) {
   const logger = (ctx && ctx.logger) || console;
   return new Promise((resolve, reject) => {
@@ -78,14 +80,17 @@ function captureSession(ctx) {
       : createSessionWindow();
     const ses = win.webContents.session;
     let settled = false;
-    let found = null;
+    const captures = [];
     let replayTimer = null;
+    let watchTimer = null;
+    let lastActivity = Date.now();
 
     const finish = (quota, cred) => {
       if (settled) return;
       settled = true;
-      writeCred(ctx && ctx.store, cred);
       clearTimeout(replayTimer);
+      clearInterval(watchTimer);
+      writeCred(ctx && ctx.store, cred);
       try { win.close(); } catch (e) {}
       resolve(quota);
     };
@@ -93,24 +98,24 @@ function captureSession(ctx) {
       if (settled) return;
       settled = true;
       clearTimeout(replayTimer);
+      clearInterval(watchTimer);
       logger.error('[opencode-go] capture failed:', err && err.message ? err.message : err);
       try { win.close(); } catch (e) {}
       reject(err);
     };
 
-    // 捕获用量请求的 URL / body / Cookie / 来源头
+    // 捕获所有 _server 请求的 URL / body / Cookie / 来源头
     ses.webRequest.onBeforeSendHeaders((details, callback) => {
-      if (!found && details.url.indexOf('/_server') !== -1) {
+      if (details.method === 'POST' && details.url.indexOf('/_server') !== -1) {
+        lastActivity = Date.now();
         const body = bodyFromUpload(details.requestBody && details.requestBody.uploadData);
-        if (body.indexOf(QUERY_NAME) !== -1) {
-          found = {
-            url: details.url,
-            requestBody: body,
-            cookie: details.requestHeaders['cookie'] || '',
-            headers: pickHeaders(details.requestHeaders)
-          };
-          logger.log('[opencode-go] captured _server usage request:', details.url);
-        }
+        captures.push({
+          url: details.url,
+          requestBody: body,
+          cookie: details.requestHeaders['cookie'] || '',
+          headers: pickHeaders(details.requestHeaders)
+        });
+        logger.log('[opencode-go] captured _server POST:', details.url, '| body:', body.slice(0, 160));
       }
       callback({ requestHeaders: details.requestHeaders });
     });
@@ -126,44 +131,70 @@ function captureSession(ctx) {
       }
     });
 
-    // 捕获到请求后,页面内重放 fetch 拿真实 JSON(自动携带 cookie,排除浏览器禁止手动设置的 cookie 头)
-    function replay() {
-      if (settled || !found) return;
-      const bodyLiteral = JSON.stringify(found.requestBody);
-      const replayHeaders = Object.assign({ 'Content-Type': 'application/json' }, found.headers || {});
+    // 依次重放捕获到的请求,直到解析出用量结构
+    function replayAll(index) {
+      if (settled) return;
+      if (index >= captures.length) {
+        logger.log('[opencode-go] no usage payload among ' + captures.length + ' captured requests');
+        fail(new Error('未捕获到 OpenCode Go 用量数据(请确认订阅了 Go 套餐并进入订阅页)'));
+        return;
+      }
+      const cap = captures[index];
+      const bodyLiteral = JSON.stringify(cap.requestBody);
+      const replayHeaders = Object.assign({ 'Content-Type': 'application/json' }, cap.headers || {});
       delete replayHeaders.cookie;
       delete replayHeaders.Cookie;
       const headersLiteral = JSON.stringify(replayHeaders);
       win.webContents.executeJavaScript(
-        'fetch(' + JSON.stringify(found.url) + ',{method:"POST",headers:' + headersLiteral + ',body:' + bodyLiteral + '}).then(r=>r.text())'
+        'fetch(' + JSON.stringify(cap.url) + ',{method:"POST",headers:' + headersLiteral + ',body:' + bodyLiteral + '}).then(r=>r.text())'
       )
         .then((text) => {
+          logger.log('[opencode-go] replay #' + index + ' ->', text.slice(0, 200));
           let parsed = null;
           try { parsed = JSON.parse(text); } catch (e) {}
           const quota = parseQuota(parsed);
           if (!quota) {
-            fail(new Error('用量响应解析失败'));
+            replayAll(index + 1);
             return;
           }
           const cred = {
-            workspaceID: extractWorkspace(found.requestBody),
-            url: found.url,
-            cookie: found.cookie,
-            requestBody: found.requestBody,
-            headers: found.headers,
+            workspaceID: extractWorkspace(cap.requestBody),
+            url: cap.url,
+            cookie: cap.cookie,
+            requestBody: cap.requestBody,
+            headers: cap.headers,
             capturedAt: Date.now()
           };
           finish(quota, cred);
         })
-        .catch((e) => fail(e));
+        .catch((e) => {
+          logger.log('[opencode-go] replay #' + index + ' error:', e && e.message ? e.message : e);
+          replayAll(index + 1);
+        });
+    }
+
+    function scheduleReplay() {
+      clearTimeout(replayTimer);
+      replayTimer = setTimeout(() => {
+        if (!settled) replayAll(0);
+      }, 500);
     }
 
     ses.webRequest.onCompleted((details) => {
-      if (found && !settled && details.url.indexOf('/_server') !== -1) {
-        clearTimeout(replayTimer);
-        replayTimer = setTimeout(replay, 400);
+      if (!settled && details.method === 'POST' && details.url.indexOf('/_server') !== -1) {
+        scheduleReplay();
       }
     });
+
+    // 兜底:窗口持续打开但一直没抓到 _server 请求时给出诊断(120s 后)
+    watchTimer = setInterval(() => {
+      if (settled) { clearInterval(watchTimer); return; }
+      if (captures.length) { clearInterval(watchTimer); return; }
+      if (Date.now() - lastActivity > 120000) {
+        logger.log('[opencode-go] no _server request captured for 120s, last activity:', new Date(lastActivity).toISOString());
+      }
+    }, 30000);
+    scheduleReplay();
 
     win.webContents.on('did-fail-load', (event, code, desc) => {
       logger.log('[opencode-go] did-fail-load:', code, desc);
