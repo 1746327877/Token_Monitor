@@ -28,9 +28,9 @@ test('default compact layout keeps stat cards as square tiles above full-width c
   const byId = Object.fromEntries(compact.items.map((item) => [item.id, item]));
 
   assert.equal(compact.columns, 12);
-  // 订阅额度卡置顶,统计卡紧随其后,图表与热力图依次排下
+  // OpenCode Go 额度置顶,订阅额度卡紧随其后,统计卡与图表依次排下
   assert.deepEqual(
-    ['quota-codex', 'quota-kimi'].map((id) => ({
+    ['quota-opencode-go', 'quota-codex'].map((id) => ({
       x: byId[id].x,
       y: byId[id].y,
       w: byId[id].w
@@ -48,9 +48,9 @@ test('default compact layout keeps stat cards as square tiles above full-width c
       h: byId[id].h
     })),
     [
-      { x: 0, y: 14, w: 4, h: 4 },
-      { x: 4, y: 14, w: 4, h: 4 },
-      { x: 8, y: 14, w: 4, h: 4 }
+      { x: 0, y: 21, w: 4, h: 4 },
+      { x: 4, y: 21, w: 4, h: 4 },
+      { x: 8, y: 21, w: 4, h: 4 }
     ]
   );
   assert.deepEqual(
@@ -72,7 +72,7 @@ test('migration rebuilds default compact layout with stat cards in a row', () =>
 
   assert.equal(migrated.version, policy.VERSION);
   assert.equal(migrated.compact.columns, 12);
-  // 旧 componentOrder 不含新增板块:quota 卡按注册表顺序插到统计卡之前
+  // 旧 componentOrder 不含新增板块:quota 卡按注册表顺序插到统计卡之前(OpenCode Go 最前)
   assert.deepEqual(
     ['balance-card', 'today-cost-card', 'cache-rate-card'].map((id) => ({
       x: byId[id].x,
@@ -81,9 +81,9 @@ test('migration rebuilds default compact layout with stat cards in a row', () =>
       h: byId[id].h
     })),
     [
-      { x: 0, y: 14, w: 4, h: 4 },
-      { x: 4, y: 14, w: 4, h: 4 },
-      { x: 8, y: 14, w: 4, h: 4 }
+      { x: 0, y: 21, w: 4, h: 4 },
+      { x: 4, y: 21, w: 4, h: 4 },
+      { x: 8, y: 21, w: 4, h: 4 }
     ]
   );
 });
@@ -106,15 +106,15 @@ test('migration preserves compact component order', () => {
 
   assert.deepEqual(
     migrated.compact.items.map((item) => item.id),
-    ['quota-codex', 'quota-kimi', 'provider-bar', 'cost-line', 'balance-card', 'today-cost-card', 'cache-rate-card', 'model-bar', 'token-line', 'token-heatmap', 'opencode-stats-card', 'quota-opencode-go']
+    ['quota-opencode-go', 'quota-codex', 'quota-kimi', 'provider-bar', 'cost-line', 'balance-card', 'today-cost-card', 'cache-rate-card', 'model-bar', 'token-line', 'token-heatmap', 'opencode-stats-card']
   );
   assert.deepEqual(
     migrated.compact.items.map((item) => item.y),
-    [0, 7, 14, 20, 26, 26, 26, 30, 36, 42, 52, 56]
+    [0, 7, 14, 21, 27, 33, 33, 33, 37, 43, 49, 59]
   );
   assert.deepEqual(
     migrated.compact.items.map((item) => item.x),
-    [0, 0, 0, 0, 0, 4, 8, 0, 0, 0, 0, 0]
+    [0, 0, 0, 0, 0, 0, 4, 8, 0, 0, 0, 0]
   );
 });
 

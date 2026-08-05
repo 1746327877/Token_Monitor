@@ -11,6 +11,14 @@ var windowDefinitions = [
   { group: '窗口', key: 'window.layoutLocked', type: 'toggle', label: '锁定布局', default: true }
 ];
 
+var platformDefinitions = [
+  { group: '平台', key: 'components.platformOpenCodeGo', type: 'toggle', label: 'OpenCode Go', default: true },
+  { group: '平台', key: 'components.platformCodex', type: 'toggle', label: 'Codex', default: true },
+  { group: '平台', key: 'components.platformKimi', type: 'toggle', label: 'Kimi', default: true },
+  { group: '平台', key: 'components.platformDeepseek', type: 'toggle', label: 'DeepSeek', default: true },
+  { group: '平台', key: 'components.platformOpenCode', type: 'toggle', label: 'OpenCode', default: true }
+];
+
 var componentDefinitions = window.ComponentRegistry.list().map(function (component) {
   return {
     group: '组件',
@@ -28,4 +36,4 @@ var tailDefinitions = [
   { group: '关于', key: 'apiKey', type: 'password', label: 'API Key', default: '' }
 ];
 
-window.SettingsDefinitions = windowDefinitions.concat(componentDefinitions, tailDefinitions);
+window.SettingsDefinitions = windowDefinitions.concat(platformDefinitions, componentDefinitions, tailDefinitions);

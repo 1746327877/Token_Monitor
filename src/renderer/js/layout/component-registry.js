@@ -3,7 +3,74 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ComponentRegistry = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  // 顺序与 renderer/src/grid/components.js 保持一致(OpenCode Go 额度置顶)。
   var components = [
+    {
+      id: 'quota-opencode-go',
+      label: 'OpenCode Go 额度',
+      settingsKey: 'components.quotaOpenCodeGo',
+      defaultVisible: true,
+      presets: {
+        compact: [
+          { name: 'full', w: 12, h: 7 },
+          { name: 'half', w: 6, h: 7 },
+          { name: 'tall', w: 12, h: 9 }
+        ],
+        wide: [
+          { name: 'full', w: 12, h: 7 },
+          { name: 'half', w: 6, h: 7 },
+          { name: 'tall', w: 12, h: 9 }
+        ]
+      },
+      defaultPlacement: {
+        compact: { x: 0, y: 0, w: 12, h: 7, preset: 'full' },
+        wide: { x: 0, y: 0, w: 12, h: 7, preset: 'full' }
+      }
+    },
+    {
+      id: 'quota-codex',
+      label: 'Codex 额度',
+      settingsKey: 'components.quotaCodex',
+      defaultVisible: true,
+      presets: {
+        compact: [
+          { name: 'full', w: 12, h: 7 },
+          { name: 'half', w: 6, h: 7 },
+          { name: 'tall', w: 12, h: 9 }
+        ],
+        wide: [
+          { name: 'full', w: 12, h: 7 },
+          { name: 'half', w: 6, h: 7 },
+          { name: 'tall', w: 12, h: 9 }
+        ]
+      },
+      defaultPlacement: {
+        compact: { x: 0, y: 7, w: 12, h: 7, preset: 'full' },
+        wide: { x: 0, y: 7, w: 12, h: 7, preset: 'full' }
+      }
+    },
+    {
+      id: 'quota-kimi',
+      label: 'Kimi 额度',
+      settingsKey: 'components.quotaKimi',
+      defaultVisible: true,
+      presets: {
+        compact: [
+          { name: 'full', w: 12, h: 7 },
+          { name: 'half', w: 6, h: 7 },
+          { name: 'tall', w: 12, h: 9 }
+        ],
+        wide: [
+          { name: 'full', w: 12, h: 7 },
+          { name: 'half', w: 6, h: 7 },
+          { name: 'tall', w: 12, h: 9 }
+        ]
+      },
+      defaultPlacement: {
+        compact: { x: 0, y: 14, w: 12, h: 7, preset: 'full' },
+        wide: { x: 0, y: 14, w: 12, h: 7, preset: 'full' }
+      }
+    },
     {
       id: 'balance-card',
       label: '余额',
@@ -21,8 +88,8 @@
         ]
       },
       defaultPlacement: {
-        compact: { x: 0, y: 0, w: 4, h: 4, preset: 'card' },
-        wide: { x: 0, y: 0, w: 4, h: 4, preset: 'card' }
+        compact: { x: 0, y: 21, w: 4, h: 4, preset: 'card' },
+        wide: { x: 0, y: 21, w: 4, h: 4, preset: 'card' }
       }
     },
     {
@@ -42,8 +109,8 @@
         ]
       },
       defaultPlacement: {
-        compact: { x: 4, y: 0, w: 4, h: 4, preset: 'card' },
-        wide: { x: 4, y: 0, w: 4, h: 4, preset: 'card' }
+        compact: { x: 4, y: 21, w: 4, h: 4, preset: 'card' },
+        wide: { x: 4, y: 21, w: 4, h: 4, preset: 'card' }
       }
     },
     {
@@ -63,8 +130,8 @@
         ]
       },
       defaultPlacement: {
-        compact: { x: 8, y: 0, w: 4, h: 4, preset: 'card' },
-        wide: { x: 8, y: 0, w: 4, h: 4, preset: 'card' }
+        compact: { x: 8, y: 21, w: 4, h: 4, preset: 'card' },
+        wide: { x: 8, y: 21, w: 4, h: 4, preset: 'card' }
       }
     },
     {
@@ -87,8 +154,8 @@
         ]
       },
       defaultPlacement: {
-        compact: { x: 0, y: 4, w: 12, h: 6, preset: 'full' },
-        wide: { x: 0, y: 4, w: 12, h: 6, preset: 'full' }
+        compact: { x: 0, y: 25, w: 12, h: 6, preset: 'full' },
+        wide: { x: 0, y: 25, w: 12, h: 6, preset: 'full' }
       }
     },
     {
@@ -111,8 +178,8 @@
         ]
       },
       defaultPlacement: {
-        compact: { x: 0, y: 10, w: 12, h: 6, preset: 'full' },
-        wide: { x: 0, y: 10, w: 12, h: 6, preset: 'full' }
+        compact: { x: 0, y: 31, w: 12, h: 6, preset: 'full' },
+        wide: { x: 0, y: 31, w: 12, h: 6, preset: 'full' }
       }
     },
     {
@@ -135,8 +202,8 @@
         ]
       },
       defaultPlacement: {
-        compact: { x: 0, y: 13, w: 12, h: 6, preset: 'full' },
-        wide: { x: 0, y: 13, w: 12, h: 6, preset: 'full' }
+        compact: { x: 0, y: 37, w: 12, h: 6, preset: 'full' },
+        wide: { x: 0, y: 37, w: 12, h: 6, preset: 'full' }
       }
     },
     {
@@ -159,8 +226,30 @@
         ]
       },
       defaultPlacement: {
-        compact: { x: 0, y: 22, w: 12, h: 6, preset: 'full' },
-        wide: { x: 0, y: 22, w: 12, h: 6, preset: 'full' }
+        compact: { x: 0, y: 43, w: 12, h: 6, preset: 'full' },
+        wide: { x: 0, y: 43, w: 12, h: 6, preset: 'full' }
+      }
+    },
+    {
+      id: 'token-heatmap',
+      label: 'Token 活动',
+      settingsKey: 'components.tokenHeatmap',
+      defaultVisible: true,
+      presets: {
+        compact: [
+          { name: 'full', w: 12, h: 10 },
+          { name: 'half', w: 6, h: 11 },
+          { name: 'tall', w: 12, h: 12 }
+        ],
+        wide: [
+          { name: 'full', w: 12, h: 10 },
+          { name: 'half', w: 6, h: 11 },
+          { name: 'tall', w: 12, h: 12 }
+        ]
+      },
+      defaultPlacement: {
+        compact: { x: 0, y: 49, w: 12, h: 10, preset: 'full' },
+        wide: { x: 0, y: 49, w: 12, h: 10, preset: 'full' }
       }
     },
     {
@@ -180,30 +269,8 @@
         ]
       },
       defaultPlacement: {
-        compact: { x: 0, y: 28, w: 4, h: 4, preset: 'card' },
-        wide: { x: 0, y: 28, w: 4, h: 4, preset: 'card' }
-      }
-    },
-    {
-      id: 'quota-opencode-go',
-      label: 'OpenCode Go 额度',
-      settingsKey: 'components.quotaOpenCodeGo',
-      defaultVisible: true,
-      presets: {
-        compact: [
-          { name: 'full', w: 12, h: 7 },
-          { name: 'half', w: 6, h: 7 },
-          { name: 'tall', w: 12, h: 9 }
-        ],
-        wide: [
-          { name: 'full', w: 12, h: 7 },
-          { name: 'half', w: 6, h: 7 },
-          { name: 'tall', w: 12, h: 9 }
-        ]
-      },
-      defaultPlacement: {
-        compact: { x: 0, y: 32, w: 12, h: 7, preset: 'full' },
-        wide: { x: 0, y: 32, w: 12, h: 7, preset: 'full' }
+        compact: { x: 0, y: 59, w: 4, h: 4, preset: 'card' },
+        wide: { x: 0, y: 59, w: 4, h: 4, preset: 'card' }
       }
     }
   ];

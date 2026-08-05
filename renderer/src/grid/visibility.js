@@ -8,10 +8,31 @@ export function getNestedSetting(settings, path) {
   }, settings);
 }
 
+// 组件 → 所属平台的开关键(components.platform*)。聚合类组件(每日/趋势/热力图)不受平台开关控制。
+const PLATFORM_KEYS = {
+  'quota-codex': 'platformCodex',
+  'quota-kimi': 'platformKimi',
+  'quota-opencode-go': 'platformOpenCodeGo',
+  'balance-card': 'platformDeepseek',
+  'today-cost-card': 'platformDeepseek',
+  'cache-rate-card': 'platformDeepseek',
+  'model-bar': 'platformDeepseek',
+  'opencode-stats-card': 'platformOpenCode'
+};
+
+export function isProviderEnabled(component, settings) {
+  if (!component) return false;
+  const key = PLATFORM_KEYS[component.id];
+  if (!key) return true;
+  const configured = getNestedSetting(settings, 'components.' + key);
+  return configured === undefined ? true : configured !== false;
+}
+
 export function isComponentVisible(component, settings) {
   if (!component) return false;
   const configured = getNestedSetting(settings, component.settingsKey);
-  return configured === undefined ? component.defaultVisible !== false : configured !== false;
+  const visible = configured === undefined ? component.defaultVisible !== false : configured !== false;
+  return visible && isProviderEnabled(component, settings);
 }
 
 export function visibleComponentIds(settings) {

@@ -36,6 +36,32 @@ test('missing component settings use registry defaults and false remains false',
   assert.equal(disabled.includes('cost-line'), false);
 });
 
+test('platform toggles hide that platform component cards', async () => {
+  const { visibleComponentIds } = await loadVisibility();
+
+  const hideCodex = visibleComponentIds({ components: { platformCodex: false } });
+  assert.equal(hideCodex.includes('quota-codex'), false);
+  assert.equal(hideCodex.includes('quota-kimi'), true);
+  assert.equal(hideCodex.includes('quota-opencode-go'), true);
+
+  const hideGo = visibleComponentIds({ components: { platformOpenCodeGo: false } });
+  assert.equal(hideGo.includes('quota-opencode-go'), false);
+
+  const hideDeepseek = visibleComponentIds({ components: { platformDeepseek: false } });
+  assert.equal(hideDeepseek.includes('balance-card'), false);
+  assert.equal(hideDeepseek.includes('today-cost-card'), false);
+  assert.equal(hideDeepseek.includes('cache-rate-card'), false);
+  assert.equal(hideDeepseek.includes('model-bar'), false);
+
+  const hideOpenCode = visibleComponentIds({ components: { platformOpenCode: false } });
+  assert.equal(hideOpenCode.includes('opencode-stats-card'), false);
+
+  // 聚合类组件(每日堆叠/趋势/热力图)不受平台开关影响
+  const agg = visibleComponentIds({ components: { platformCodex: false, platformKimi: false, platformDeepseek: false } });
+  assert.equal(agg.includes('provider-bar'), true);
+  assert.equal(agg.includes('token-heatmap'), true);
+});
+
 test('saving rendered nodes preserves geometry for hidden or unavailable modules', async () => {
   const { mergeLayoutItems } = await loadVisibility();
   const existing = [
