@@ -1,23 +1,28 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { parseQuota, buildHeaders, fetchQuota, LIMITS } = require('../src/main/providers/opencode-go/quota');
+const { parseScrapedUsage, parseResetSeconds, LIMITS } = require('../src/main/providers/opencode-go/quota');
 const { extractWorkspace } = require('../src/main/providers/opencode-go/auth');
 
-// 与 console core lite-section queryLiteSubscription 返回结构一致的样本
-function sampleResponse(overrides) {
-  return Object.assign({
-    mine: true,
-    useBalance: false,
-    region: ['us', 'eu', 'sg'],
-    rollingUsage: { status: 'ok', resetInSec: 7200, usagePercent: 45 },
-    weeklyUsage: { status: 'ok', resetInSec: 86400 * 3, usagePercent: 20 },
-    monthlyUsage: { status: 'ok', resetInSec: 86400 * 12, usagePercent: 50 }
-  }, overrides);
-}
+test('parseResetSeconds handles zh and en unit text', () => {
+  assert.equal(parseResetSeconds('重置时间: 2 小时 5 分钟'), 2 * 3600 + 5 * 60);
+  assert.equal(parseResetSeconds('Resets in 2 hours 5 minutes'), 2 * 3600 + 5 * 60);
+  assert.equal(parseResetSeconds('重置时间: 1 天 3 小时'), 86400 + 3 * 3600);
+  assert.equal(parseResetSeconds('1 day 2 hours'), 86400 + 2 * 3600);
+  assert.equal(parseResetSeconds('30 分钟'), 30 * 60);
+  assert.equal(parseResetSeconds('5 minutes'), 300);
+  assert.equal(parseResetSeconds('几秒'), 0);
+  assert.equal(parseResetSeconds('a few seconds'), 0);
+  assert.equal(parseResetSeconds(''), 0);
+});
 
-test('parseQuota maps percent windows into 5h/weekly/monthly quota windows', () => {
-  const quota = parseQuota(sampleResponse());
+test('parseScrapedUsage maps DOM items into 5h/weekly/monthly windows', () => {
+  const items = [
+    { label: '滚动用量', value: '45%', resetText: '重置时间: 2 小时' },
+    { label: '每周用量', value: '20%', resetText: '重置时间: 3 天' },
+    { label: '每月用量', value: '50%', resetText: '重置时间: 12 天' }
+  ];
+  const quota = parseScrapedUsage(items);
   assert.ok(quota);
   assert.equal(quota.provider, 'opencode-go');
   assert.equal(quota.billingMode, 'subscription');
@@ -27,94 +32,37 @@ test('parseQuota maps percent windows into 5h/weekly/monthly quota windows', () 
   const byKind = {};
   quota.windows.forEach((w) => { byKind[w.kind] = w; });
 
-  // 5h:$12 → 45% = $5.40
-  assert.equal(byKind['5h'].kind, '5h');
-  assert.equal(byKind['5h'].used, 12 * 0.45);
+  assert.equal(byKind['5h'].used, LIMITS.rolling * 0.45);
   assert.equal(byKind['5h'].limit, LIMITS.rolling);
-  assert.equal(byKind['5h'].remaining, 12 - 12 * 0.45);
-
-  // weekly:$30 → 20% = $6.00
-  assert.equal(byKind.weekly.used, 30 * 0.20);
-  assert.equal(byKind.weekly.limit, LIMITS.weekly);
-
-  // monthly:$60 → 50% = $30.00
-  assert.equal(byKind.monthly.used, 60 * 0.50);
-  assert.equal(byKind.monthly.limit, LIMITS.monthly);
-
-  // resetsAt = now + resetInSec*1000(容差 1s)
-  assert.ok(Math.abs(byKind['5h'].resetsAt - (Date.now() + 7200 * 1000)) < 1000);
-  assert.ok(Math.abs(byKind.weekly.resetsAt - (Date.now() + 86400 * 3 * 1000)) < 1000);
+  assert.equal(byKind.weekly.used, LIMITS.weekly * 0.20);
+  assert.equal(byKind.monthly.used, LIMITS.monthly * 0.50);
+  assert.ok(Math.abs(byKind['5h'].resetsAt - (Date.now() + 2 * 3600 * 1000)) < 1000);
+  assert.ok(Math.abs(byKind.weekly.resetsAt - (Date.now() + 3 * 86400 * 1000)) < 1000);
 });
 
-test('parseQuota accepts the { result } server-function wrapper and clamps percent', () => {
-  const wrapped = parseQuota({ result: sampleResponse({ rollingUsage: { status: 'ok', resetInSec: 0, usagePercent: 150 } }) });
-  assert.ok(wrapped);
-  assert.equal(wrapped.windows[0].kind, '5h');
-  assert.equal(wrapped.windows[0].used, LIMITS.rolling);
-  assert.equal(wrapped.windows[0].remaining, 0);
-
-  const negative = parseQuota(sampleResponse({ rollingUsage: { status: 'ok', resetInSec: 60, usagePercent: -5 } }));
-  assert.equal(negative.windows[0].used, 0);
-});
-
-test('parseQuota returns null for empty or unusable payloads', () => {
-  assert.equal(parseQuota(null), null);
-  assert.equal(parseQuota({}), null);
-  assert.equal(parseQuota({ result: {} }), null);
-});
-
-test('buildHeaders merges captured origin/referer/UA with cookie', () => {
-  const headers = buildHeaders({
-    cookie: 'session=abc',
-    headers: { origin: 'https://opencode.ai', referer: 'https://opencode.ai/workspace/x/go', 'user-agent': 'Mozilla', 'x-solidstart-media-type': 'application/json' }
-  });
-  assert.equal(headers['Cookie'], 'session=abc');
-  assert.equal(headers.origin, 'https://opencode.ai');
-  assert.equal(headers.referer, 'https://opencode.ai/workspace/x/go');
-  assert.equal(headers['user-agent'], 'Mozilla');
-  assert.equal(headers['x-solidstart-media-type'], 'application/json');
-});
-
-test('fetchQuota returns null without captured credentials', async () => {
-  const store = { get() { return null; }, set() {}, delete() {} };
-  const ctx = { store, httpPostJson: async () => { throw new Error('should not call'); }, getProxyUrl: () => null };
-  assert.equal(await fetchQuota(ctx), null);
-});
-
-test('fetchQuota replays the captured _server request with the stored cookie', async () => {
-  const requestBody = JSON.stringify({ name: 'lite.subscription.get', args: ['ws_123'] });
-  const captured = {
-    url: 'https://opencode.ai/_server',
-    cookie: 'session=xyz',
-    requestBody,
-    headers: { origin: 'https://opencode.ai', referer: 'https://opencode.ai/workspace/ws_123/go', 'user-agent': 'UA' },
-    capturedAt: Date.now()
-  };
-  let posted = null;
-  const store = {
-    get(k) { return k === 'providers.opencode-go.session' ? captured : null; },
-    set() {}, delete() {}
-  };
-  const ctx = {
-    store,
-    httpPostJson: async (url, body, headers, proxyUrl) => {
-      posted = { url, body, headers, proxyUrl };
-      return { result: sampleResponse() };
-    },
-    getProxyUrl: () => 'http://127.0.0.1:7890'
-  };
-
-  const quota = await fetchQuota(ctx);
+test('parseScrapedUsage tolerates en text and clamps percent', () => {
+  const items = [
+    { value: '150%', resetText: 'Resets in 1 hour' },
+    { value: '20%', resetText: 'Resets in 1 day' },
+    { value: '50%', resetText: 'Resets in 12 days' }
+  ];
+  const quota = parseScrapedUsage(items);
   assert.ok(quota);
-  assert.equal(posted.url, 'https://opencode.ai/_server');
-  assert.deepEqual(posted.body, { name: 'lite.subscription.get', args: ['ws_123'] });
-  assert.equal(posted.headers['Cookie'], 'session=xyz');
-  assert.equal(posted.headers.origin, 'https://opencode.ai');
-  assert.equal(posted.proxyUrl, 'http://127.0.0.1:7890');
+  assert.equal(quota.windows[0].used, LIMITS.rolling);
+  assert.equal(quota.windows[0].remaining, 0);
 });
 
-test('extractWorkspace reads the workspace id from the captured request body', () => {
-  assert.equal(extractWorkspace('{"name":"lite.subscription.get","args":["ws_42"]}'), 'ws_42');
-  assert.equal(extractWorkspace('{"args":[]}'), null);
-  assert.equal(extractWorkspace('not json'), null);
+test('parseScrapedUsage returns null when nothing parses, partial when some do', () => {
+  assert.equal(parseScrapedUsage(null), null);
+  assert.equal(parseScrapedUsage([]), null);
+  assert.equal(parseScrapedUsage([{ value: 'nope' }]), null);
+  const partial = parseScrapedUsage([{ value: '45%' }, { value: '20%' }]);
+  assert.ok(partial);
+  assert.equal(partial.windows.length, 2);
+});
+
+test('extractWorkspace reads the workspace id from a console url', () => {
+  assert.equal(extractWorkspace('https://opencode.ai/workspace/wrk_123/go'), 'wrk_123');
+  assert.equal(extractWorkspace('https://opencode.ai/zh/workspace/wrk_abc/go'), 'wrk_abc');
+  assert.equal(extractWorkspace('https://opencode.ai/auth'), null);
 });

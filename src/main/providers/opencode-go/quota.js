@@ -80,4 +80,63 @@ async function fetchQuota(ctx) {
   return parseQuota(data);
 }
 
-module.exports = { parseQuota, fetchQuota, buildHeaders, windowFromPercent, LIMITS, CRED_KEY };
+module.exports = { parseQuota, fetchQuota, buildHeaders, windowFromPercent, LIMITS, CRED_KEY, parseScrapedUsage, parseResetSeconds };
+
+// ============ DOM 抓取解析(SSR 直接把用量渲染进页面,无需 _server 请求) ============
+
+function clamp(n, lo, hi) {
+  return Math.min(hi, Math.max(lo, n));
+}
+
+// 从 usage-value 文本解析百分比,如 "45%"。
+function parsePercent(text) {
+  const m = /(\d+(?:\.\d+)?)\s*%/.exec(String(text || ''));
+  return m ? clamp(parseFloat(m[1]), 0, 100) : null;
+}
+
+// 解析重置时间文本(zh/en):"2 小时 5 分钟"/"2 hours 5 minutes"/"几秒" → 秒。
+function parseResetSeconds(text) {
+  const s = String(text || '');
+  if (/几秒|few second/i.test(s)) return 0;
+  let total = 0;
+  const re = /(\d+)\s*(天|小时|分钟|day|hour|minute)/gi;
+  let m;
+  while ((m = re.exec(s))) {
+    const n = parseInt(m[1], 10);
+    const unit = m[2];
+    if (unit.indexOf('天') !== -1 || /^d/i.test(unit)) total += n * 86400;
+    else if (unit.indexOf('小') !== -1 || /^h/i.test(unit)) total += n * 3600;
+    else if (unit.indexOf('分') !== -1 || /^m/i.test(unit)) total += n * 60;
+  }
+  return total;
+}
+
+// 按 DOM 顺序(rolling/weekly/monthly)把抓取到的 usage-item 归一化为 QuotaState。
+function parseScrapedUsage(items, now) {
+  if (!Array.isArray(items)) return null;
+  const nowMs = now || Date.now();
+  const defs = [
+    { kind: '5h', name: '5 小时窗口', limit: LIMITS.rolling },
+    { kind: 'weekly', name: '本周额度', limit: LIMITS.weekly },
+    { kind: 'monthly', name: '本月额度', limit: LIMITS.monthly }
+  ];
+  const windows = [];
+  for (let i = 0; i < defs.length; i++) {
+    const item = items[i];
+    if (!item) continue;
+    const pct = parsePercent(item.value);
+    if (pct === null) continue;
+    const resetSec = parseResetSeconds(item.resetText);
+    const used = Math.round(defs[i].limit * pct) / 100;
+    windows.push({
+      kind: defs[i].kind,
+      name: defs[i].name,
+      used: used,
+      limit: defs[i].limit,
+      remaining: Math.max(0, defs[i].limit - used),
+      resetsAt: nowMs + resetSec * 1000
+    });
+  }
+  if (!windows.length) return null;
+  return makeQuotaState('opencode-go', 'subscription', windows, null, 'OpenCode Go', null, nowMs);
+}

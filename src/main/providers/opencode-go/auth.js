@@ -1,25 +1,33 @@
-// OpenCode Go console 登录捕获:弹窗打开 opencode.ai/workspace,用户 SSO 登录后,
-// 拦截 _server 的 lite.subscription.get 请求,记录 { url, requestBody, cookie, headers }。
-// 之后轮询复用同一 Cookie(见 quota.js fetchQuota)。
+// OpenCode Go console 会话:弹窗登录 opencode.ai,SSR 会把用量直接渲染进 /go 页面。
+// 因此登录/轮询都通过"加载页面 + 抓取 DOM(usage-item 的百分比与重置时间)"实现,
+// 不再依赖拦截 _server 请求。会话 cookie 由持久化 partition('persist:opencode-console')保存。
 const { BrowserWindow } = require('electron');
-const { parseQuota, CRED_KEY } = require('./quota');
+const { parseScrapedUsage, CRED_KEY } = require('./quota');
 
 const CONSOLE_URL = 'https://opencode.ai/auth';
-const QUERY_NAME = 'lite.subscription.get';
+const PARTITION = 'persist:opencode-console';
+const CACHE_MS = 5 * 60 * 1000;
 
-function createSessionWindow() {
-  return new BrowserWindow({
+let cachedQuota = null;
+let cachedAt = 0;
+
+function windowOptions(extra) {
+  return Object.assign({
     width: 920,
     height: 700,
     show: true,
     center: true,
     title: '登录 OpenCode Go(console)',
     webPreferences: {
-      partition: 'persist:opencode-console',
+      partition: PARTITION,
       contextIsolation: true,
       nodeIntegration: false
     }
-  });
+  }, extra || {});
+}
+
+function createSessionWindow() {
+  return new BrowserWindow(windowOptions());
 }
 
 function readCred(store) {
@@ -30,99 +38,84 @@ function writeCred(store, cred) {
   if (store) store.set(CRED_KEY, cred);
 }
 
-function clearCred(store) {
-  if (store) store.delete(CRED_KEY);
+// 抓取页面内 usage-item 数据的内嵌脚本(SSR 渲染在 DOM 里)。
+function scrapeUsageScript() {
+  return '(() => {' +
+    'var items = [];' +
+    'document.querySelectorAll(\'[data-slot="usage-item"]\').forEach(function (el) {' +
+    '  var label = el.querySelector(\'[data-slot="usage-label"]\');' +
+    '  var value = el.querySelector(\'[data-slot="usage-value"]\');' +
+    '  var reset = el.querySelector(\'[data-slot="reset-time"]\');' +
+    '  items.push({ label: label ? label.textContent : "", value: value ? value.textContent : "", resetText: reset ? reset.textContent : "" });' +
+    '});' +
+    'return JSON.stringify(items);' +
+    '})()';
 }
 
-// 从 webRequest uploadData 还原 POST body。
-function bodyFromUpload(uploadData) {
-  if (!Array.isArray(uploadData)) return '';
-  let text = '';
-  (uploadData || []).forEach((chunk) => {
-    if (chunk && chunk.bytes) text += chunk.bytes.toString('utf8');
-  });
-  return text;
-}
-
-// 捕获重放所需的请求头:保留 cookie/origin/referer/UA/content-type/accept 与 x-* 自定义头,
-// 排除 hop-by-hop(host/content-length/connection 等)与压缩协商头。
-const HOP_BY_HOP = /^(host|content-length|connection|keep-alive|transfer-encoding|accept-encoding|upgrade|pragma|cache-control|sec-fetch-|sec-ch-ua|te)$/i;
-function pickHeaders(headers) {
-  const picked = {};
-  Object.keys(headers || {}).forEach((k) => {
-    const lk = k.toLowerCase();
-    if (HOP_BY_HOP.test(lk)) return;
-    if (/^x-/.test(lk) || ['cookie', 'origin', 'referer', 'user-agent', 'accept', 'content-type'].indexOf(lk) !== -1) {
-      picked[k] = headers[k];
-    }
-  });
-  return picked;
-}
-
-function extractWorkspace(requestBody) {
+async function scrapeUsage(win) {
+  const text = await win.webContents.executeJavaScript(scrapeUsageScript());
   try {
-    const parsed = JSON.parse(requestBody);
-    const args = Array.isArray(parsed && parsed.args) ? parsed.args : [];
-    return typeof args[0] === 'string' ? args[0] : null;
+    return JSON.parse(text);
   } catch (e) {
-    return null;
+    return [];
   }
 }
 
-// 登录捕获:成功 resolve 归一化后的 QuotaState,并已写入 store。
-// 策略:收集窗口内所有发往 /_server 的 POST(不限函数名位置,body 或 URL 均可),
-// 页面加载完成后逐个在页内重放,直到解析出 lite.subscription.get 的用量结构。
+// 轮询等待 usage-item 出现(登录后 SPA/SSR 渲染需要时间)。
+async function waitForUsage(win, timeoutMs) {
+  const started = Date.now();
+  let items = [];
+  while (Date.now() - started < timeoutMs) {
+    try {
+      items = await scrapeUsage(win);
+      if (items.length >= 3) return items;
+    } catch (e) {}
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+  return items;
+}
+
+function extractWorkspace(url) {
+  const m = /\/workspace\/([^/?#]+)/.exec(String(url || ''));
+  return m ? m[1] : null;
+}
+
+// 登录捕获:可见窗口打开 /auth → 用户 SSO 登录 → 自动跳 /workspace/<id>/go → 抓 DOM。
+// 成功 resolve 归一化后的 QuotaState,并把 workspaceID 写入 store。
 function captureSession(ctx) {
   const logger = (ctx && ctx.logger) || console;
   return new Promise((resolve, reject) => {
     const win = (ctx && typeof ctx.createSessionWindow === 'function')
       ? ctx.createSessionWindow()
       : createSessionWindow();
-    const ses = win.webContents.session;
     let settled = false;
-    const captures = [];
-    let replayTimer = null;
-    let watchTimer = null;
-    let lastActivity = Date.now();
+    let workspaceID = null;
+    let navTimer = null;
 
-    const finish = (quota, cred) => {
+    const finish = (quota) => {
       if (settled) return;
       settled = true;
-      clearTimeout(replayTimer);
-      clearInterval(watchTimer);
-      writeCred(ctx && ctx.store, cred);
+      clearTimeout(navTimer);
+      cachedQuota = quota;
+      cachedAt = Date.now();
+      const prev = readCred(ctx && ctx.store) || {};
+      writeCred(ctx && ctx.store, Object.assign({}, prev, { workspaceID: workspaceID, capturedAt: Date.now() }));
       try { win.close(); } catch (e) {}
       resolve(quota);
     };
     const fail = (err) => {
       if (settled) return;
       settled = true;
-      clearTimeout(replayTimer);
-      clearInterval(watchTimer);
+      clearTimeout(navTimer);
       logger.error('[opencode-go] capture failed:', err && err.message ? err.message : err);
       try { win.close(); } catch (e) {}
       reject(err);
     };
 
-    // 捕获所有发往 opencode.ai 的 POST(server function 路径不限于 /_server,先全收再逐个重放)
-    ses.webRequest.onBeforeSendHeaders((details, callback) => {
-      if (details.method === 'POST' && /^https:\/\/opencode\.ai\//.test(details.url)) {
-        lastActivity = Date.now();
-        const body = bodyFromUpload(details.requestBody && details.requestBody.uploadData);
-        captures.push({
-          url: details.url,
-          requestBody: body,
-          cookie: details.requestHeaders['cookie'] || '',
-          headers: pickHeaders(details.requestHeaders)
-        });
-        logger.log('[opencode-go] captured POST:', details.url, '| body:', body.slice(0, 160));
-      }
-      callback({ requestHeaders: details.requestHeaders });
-    });
-
-    // 已登录落地到 workspace 页后,自动跳到 Go 订阅页以触发用量请求(保留语言前缀)
+    // 已登录落地到 workspace 页后,自动跳到 Go 订阅页(保留语言前缀)
     win.webContents.on('did-navigate', (e, url) => {
       logger.log('[opencode-go] navigate:', url);
+      workspaceID = workspaceID || extractWorkspace(url);
       const m = /(.*\/workspace\/[^/?#]+)/.exec(url);
       if (!m) return;
       let pathname;
@@ -133,79 +126,32 @@ function captureSession(ctx) {
       }
     });
 
-    // 依次重放捕获到的请求,直到解析出用量结构
-    function replayAll(index) {
+    // 等 usage-item 渲染出来后抓取(最长 40s,覆盖登录时间)
+    async function pollScrape() {
+      const items = await waitForUsage(win, 40000);
       if (settled) return;
-      if (index >= captures.length) {
-        logger.log('[opencode-go] no usage payload among ' + captures.length + ' captured requests');
-        fail(new Error('未捕获到 OpenCode Go 用量数据(请确认订阅了 Go 套餐并进入订阅页)'));
+      const quota = parseScrapedUsage(items);
+      if (!quota) {
+        logger.log('[opencode-go] scraped items:', JSON.stringify(items));
+        fail(new Error('未在订阅页找到用量数据(请确认登录并订阅了 OpenCode Go)'));
         return;
       }
-      const cap = captures[index];
-      const bodyLiteral = JSON.stringify(cap.requestBody);
-      const replayHeaders = Object.assign({ 'Content-Type': 'application/json' }, cap.headers || {});
-      delete replayHeaders.cookie;
-      delete replayHeaders.Cookie;
-      const headersLiteral = JSON.stringify(replayHeaders);
-      win.webContents.executeJavaScript(
-        'fetch(' + JSON.stringify(cap.url) + ',{method:"POST",headers:' + headersLiteral + ',body:' + bodyLiteral + '}).then(r=>r.text())'
-      )
-        .then((text) => {
-          logger.log('[opencode-go] replay #' + index + ' ->', text.slice(0, 200));
-          let parsed = null;
-          try { parsed = JSON.parse(text); } catch (e) {}
-          const quota = parseQuota(parsed);
-          if (!quota) {
-            replayAll(index + 1);
-            return;
-          }
-          const cred = {
-            workspaceID: extractWorkspace(cap.requestBody),
-            url: cap.url,
-            cookie: cap.cookie,
-            requestBody: cap.requestBody,
-            headers: cap.headers,
-            capturedAt: Date.now()
-          };
-          finish(quota, cred);
-        })
-        .catch((e) => {
-          logger.log('[opencode-go] replay #' + index + ' error:', e && e.message ? e.message : e);
-          replayAll(index + 1);
-        });
+      logger.log('[opencode-go] captured usage from DOM, windows:', quota.windows.map((w) => w.kind).join(','));
+      finish(quota);
     }
 
-    function scheduleReplay() {
-      clearTimeout(replayTimer);
-      replayTimer = setTimeout(() => {
-        if (!settled) replayAll(0);
-      }, 500);
-    }
-
-    ses.webRequest.onCompleted((details) => {
-      if (!settled && details.method === 'POST' && /^https:\/\/opencode\.ai\//.test(details.url)) {
-        scheduleReplay();
-      }
+    win.webContents.on('did-finish-load', () => {
+      clearTimeout(navTimer);
+      navTimer = setTimeout(pollScrape, 2500);
     });
-
-    // 兜底:窗口持续打开但一直没抓到 _server 请求时给出诊断(120s 后)
-    watchTimer = setInterval(() => {
-      if (settled) { clearInterval(watchTimer); return; }
-      if (captures.length) { clearInterval(watchTimer); return; }
-      if (Date.now() - lastActivity > 120000) {
-        logger.log('[opencode-go] no _server request captured for 120s, last activity:', new Date(lastActivity).toISOString());
-      }
-    }, 30000);
 
     win.webContents.on('did-fail-load', (event, code, desc) => {
       logger.log('[opencode-go] did-fail-load:', code, desc);
+      if (code === -3) return; // 导航被自身 loadURL 打断,忽略
       if (!settled) fail(new Error('登录窗口加载失败: ' + desc));
     });
     win.on('closed', () => {
-      if (!settled) {
-        logger.log('[opencode-go] window closed without capture');
-        fail(new Error('未捕获到 OpenCode Go 用量接口(请登录并进入 Go 订阅页)'));
-      }
+      if (!settled) fail(new Error('未捕获到 OpenCode Go 用量数据(请登录并进入 Go 订阅页)'));
     });
 
     logger.log('[opencode-go] capture session start ->', CONSOLE_URL);
@@ -213,4 +159,30 @@ function captureSession(ctx) {
   });
 }
 
-module.exports = { captureSession, createSessionWindow, readCred, writeCred, clearCred, extractWorkspace, bodyFromUpload, pickHeaders, CONSOLE_URL, QUERY_NAME };
+// 轮询:5 分钟缓存 + 隐藏窗口加载 /go 页并抓 DOM(会话在持久化 partition 里,无需手动 cookie)。
+async function fetchQuota(ctx) {
+  const store = ctx && ctx.store;
+  const cred = readCred(store);
+  const workspaceID = cred && cred.workspaceID;
+  if (!workspaceID) return null;
+  const now = Date.now();
+  if (cachedQuota && now - cachedAt < CACHE_MS) return cachedQuota;
+  const win = new BrowserWindow(windowOptions({ show: false }));
+  try {
+    await win.loadURL('https://opencode.ai/workspace/' + workspaceID + '/go');
+    const items = await waitForUsage(win, 25000);
+    if (!items.length) return null;
+    const quota = parseScrapedUsage(items);
+    if (quota) {
+      cachedQuota = quota;
+      cachedAt = Date.now();
+    }
+    return quota;
+  } catch (e) {
+    return null;
+  } finally {
+    try { win.destroy(); } catch (e) {}
+  }
+}
+
+module.exports = { captureSession, createSessionWindow, fetchQuota, readCred, writeCred, extractWorkspace, scrapeUsageScript, CONSOLE_URL, PARTITION };

@@ -1,5 +1,5 @@
-// OpenCode Go Provider 适配器(quota 通道):官方 console 用量,登录捕获后带 Cookie 轮询。
-const { fetchQuota } = require('./quota');
+// OpenCode Go Provider 适配器(quota 通道):登录 console 后,加载 /go 页面抓取 DOM 用量。
+const { fetchQuota } = require('./auth');
 const { readCred } = require('./auth');
 
 module.exports = {
@@ -9,7 +9,7 @@ module.exports = {
 
   authStatus(ctx) {
     const cred = readCred(ctx && ctx.store);
-    if (!cred || !cred.cookie || !cred.url) return 'missing';
+    if (!cred || !cred.workspaceID) return 'missing';
     return 'ok';
   },
 
