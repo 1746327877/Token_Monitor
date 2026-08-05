@@ -4,6 +4,7 @@ const { ipcMain, BrowserWindow } = require('electron');
 const { buildHeatmap } = require('./core/heatmap');
 const { sanitizeSettings, isWritableSettingKey, resolveWritableSettingKey } = require('./core/settings-security');
 const { resetSettingsStore } = require('./core/settings-reset');
+const opencodeGoAuth = require('./providers/opencode-go/auth');
 
 function deepseekApiKeyCtx(deps, apiKey) {
   return {
@@ -94,6 +95,46 @@ module.exports = function setupIPC(deps) {
       return { today: { date: null, tokens: 0, cost: 0, messages: 0, models: [] }, total: { tokens: 0, cost: 0, messages: 0, days: 0 } };
     }
     return provider.getStats({ store: deps.store, logger: console });
+  });
+
+  /* ======== OpenCode Go 额度登录(console 捕获) ======== */
+
+  async function loginOpenCodeGo() {
+    const provider = deps.registry.get('opencode-go');
+    if (!provider) return;
+    try {
+      await opencodeGoAuth.captureSession({
+        store: deps.store,
+        logger: console,
+        createSessionWindow: () => new BrowserWindow({
+          width: 920,
+          height: 700,
+          show: true,
+          center: true,
+          title: '登录 OpenCode Go(console)',
+          webPreferences: {
+            partition: 'persist:opencode-console',
+            contextIsolation: true,
+            nodeIntegration: false
+          }
+        })
+      });
+      if (deps.scheduler) deps.scheduler.poll('opencode-go', 'quota');
+    } catch (e) {
+      console.error('[opencode-go] login failed:', e && e.message ? e.message : e);
+    }
+  }
+
+  ipcMain.on('login:opencode-go', () => {
+    loginOpenCodeGo();
+  });
+
+  ipcMain.on('provider:reauth', (event, providerId) => {
+    if (providerId === 'opencode-go') {
+      loginOpenCodeGo();
+    } else if (deps.scheduler) {
+      deps.scheduler.pollAll();
+    }
   });
 
   /* ======== Heatmap ======== */

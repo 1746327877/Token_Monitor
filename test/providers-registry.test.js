@@ -12,8 +12,9 @@ test('main process registers all provider adapters on startup', () => {
   assert.match(main, /require\('\.\/providers\/codex'\)/);
   assert.match(main, /require\('\.\/providers\/kimi'\)/);
   assert.match(main, /require\('\.\/providers\/opencode'\)/);
+  assert.match(main, /require\('\.\/providers\/opencode-go'\)/);
   const registrations = main.match(/registry\.register\(\w+Provider\)/g) || [];
-  assert.equal(registrations.length, 4);
+  assert.equal(registrations.length, 5);
 });
 
 test('registry registers, lists and gets adapters', () => {

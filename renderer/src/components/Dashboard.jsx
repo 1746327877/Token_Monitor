@@ -34,7 +34,7 @@ const LABELS = {
 
 const FEE_IDS = ['balance-card', 'today-cost-card', 'cache-rate-card'];
 // 嵌入式板块:quota 卡与热力图也作为 grid item(自带标题,不再渲染 component-title)
-const QUOTA_IDS = ['quota-codex', 'quota-kimi'];
+const QUOTA_IDS = ['quota-codex', 'quota-kimi', 'quota-opencode-go'];
 const EMBED_IDS = QUOTA_IDS.concat(['token-heatmap']);
 // 图表(echarts flex 填满可用高度,永不溢出)不参与自动撑高
 const CHART_IDS = ['model-bar', 'provider-bar', 'token-line', 'cost-line'];
@@ -42,6 +42,7 @@ const CHART_IDS = ['model-bar', 'provider-bar', 'token-line', 'cost-line'];
 const MIN_SIZES = {
   'quota-codex': { w: 6, h: 5 },
   'quota-kimi': { w: 6, h: 5 },
+  'quota-opencode-go': { w: 6, h: 5 },
   'balance-card': { w: 4, h: 3 },
   'today-cost-card': { w: 4, h: 3 },
   'cache-rate-card': { w: 4, h: 3 },
@@ -70,7 +71,7 @@ function WidgetBody({ id, onContentChange }) {
         provider={provider}
         quotaState={provider.quota}
         authStatus={provider.authStatus}
-        onReauthorize={() => send('refresh:dashboard')}
+        onReauthorize={() => send('provider:reauth', pid)}
       />
     );
   }

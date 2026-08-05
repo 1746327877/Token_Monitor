@@ -12,6 +12,7 @@
 
 - **Codex**:本周额度与模型级窗口(如 GPT-5.3-Codex-Spark),右上角标注套餐(如 `5x Pro`),带重置倒计时。
 - **Kimi**:本周额度与 5 小时窗口,标注套餐名称(如 Allegretto),带重置倒计时。
+- **OpenCode Go**:5 小时 / 每周 / 每月额度窗口(登录 console 后带 Cookie 轮询官方数据)。
 - **DeepSeek**:余额、今日消耗、缓存命中率三张统计卡片。
 
 ### 图表
@@ -40,6 +41,7 @@
 | Codex | 读取本机 Codex 会话的用量接口 |
 | Kimi | 读取本机 Kimi 会话的用量接口 |
 | OpenCode | 读取本机 opencode 会话消息(storage/message),统计每日 Token / 费用(含 reasoning 与缓存) |
+| OpenCode Go | 弹窗登录 opencode.ai console 捕获会话,带 Cookie 轮询官方用量接口(5h / 周 / 月额度) |
 
 所有数据仅在本地处理,不会上传到任何第三方服务器。
 

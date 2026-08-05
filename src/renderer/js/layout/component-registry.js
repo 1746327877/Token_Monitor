@@ -183,6 +183,28 @@
         compact: { x: 0, y: 28, w: 4, h: 4, preset: 'card' },
         wide: { x: 0, y: 28, w: 4, h: 4, preset: 'card' }
       }
+    },
+    {
+      id: 'quota-opencode-go',
+      label: 'OpenCode Go 额度',
+      settingsKey: 'components.quotaOpenCodeGo',
+      defaultVisible: true,
+      presets: {
+        compact: [
+          { name: 'full', w: 12, h: 7 },
+          { name: 'half', w: 6, h: 7 },
+          { name: 'tall', w: 12, h: 9 }
+        ],
+        wide: [
+          { name: 'full', w: 12, h: 7 },
+          { name: 'half', w: 6, h: 7 },
+          { name: 'tall', w: 12, h: 9 }
+        ]
+      },
+      defaultPlacement: {
+        compact: { x: 0, y: 32, w: 12, h: 7, preset: 'full' },
+        wide: { x: 0, y: 32, w: 12, h: 7, preset: 'full' }
+      }
     }
   ];
   var runtime = Object.create(null);
