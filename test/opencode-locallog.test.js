@@ -6,6 +6,7 @@ const path = require('node:path');
 
 const {
   parseMessageFile,
+  parseMessageData,
   scanMessageFiles,
   readLocalLog,
   getStats
@@ -49,6 +50,31 @@ test('parseMessageFile maps opencode tokens including reasoning into output', ()
   assert.equal(rec.usage.cached, 500);
   assert.equal(rec.usage.output, 98 + 32);
   assert.equal(rec.usage.total, 12828 + 500 + 98 + 32);
+});
+
+test('parseMessageData handles the SQLite data field (tokens.total present, id separate)', () => {
+  const row = {
+    id: 'msg_sq1',
+    time_created: 1785917860034,
+    data: JSON.stringify(makeMessage({
+      id: undefined,
+      tokens: { total: 433597, input: 613, output: 156, reasoning: 316, cache: { write: 0, read: 432512 } }
+    }))
+  };
+  const rec = parseMessageData(JSON.parse(row.data), row.id);
+  assert.ok(rec);
+  assert.equal(rec.id, 'msg_sq1');
+  // total 直接取自 tokens.total(含缓存读取 + reasoning)
+  assert.equal(rec.usage.total, 433597);
+  assert.equal(rec.usage.input, 613);
+  assert.equal(rec.usage.cached, 432512);
+  assert.equal(rec.usage.output, 156 + 316);
+
+  // 未完成(无 time.completed)不计数
+  const pending = parseMessageData(makeMessage({ time: { created: 1 } }), 'msg_sq2');
+  assert.equal(pending, null);
+  // 非 assistant 不计
+  assert.equal(parseMessageData(makeMessage({ role: 'user' }), 'msg_sq3'), null);
 });
 
 test('parseMessageFile returns null for non-json / non-assistant / incomplete / missing tokens', () => {

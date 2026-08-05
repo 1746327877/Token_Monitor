@@ -1,30 +1,24 @@
-// opencode 本地会话消息读取:storage/message/<sessionID>/<messageID>.json。
-// 与 codex/kimi 的 JSONL 追加日志不同:每个消息是独立 JSON 文件,完成前可能被反复改写,
-// 因此按 {size, mtimeMs} 判变更 + 按消息 id 去重,已计入的 completed 消息不再重复统计。
+// opencode 本地会话消息读取。
+// 新版 opencode(桌面端 v2)把消息存进 SQLite `opencode.db`(message 表,data 为 JSON),
+// 不再写 storage/message/**/*.json。主路径读 SQLite(全量重算,天然处理流式更新);
+// 若 DB 不存在则回退到旧 JSON 文件增量扫描。
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { localDayStr } = require('../../core/locallog');
 
-// Windows 下 opencode 数据目录为 %USERPROFILE%\.local\share\opencode(storage 统一走 XDG 布局)
 const DEFAULT_ROOT = () => path.join(os.homedir(), '.local', 'share', 'opencode', 'storage', 'message');
+const DEFAULT_DB_PATH = () => path.join(os.homedir(), '.local', 'share', 'opencode', 'opencode.db');
 const MATCH = /\.json$/;
 const CURSOR_KEY = 'localLogCursors.opencode';
 
-// 解析单条消息文件,仅统计已完成的 assistant 消息。
+// 解析单条消息(data 为消息对象),仅统计已完成的 assistant 消息。
 // 字段语义对照 opencode src/session/session.ts updateCostAndTokens:
 //   input  = tokens.input(已扣除缓存读写)
 //   cached = tokens.cache.read
 //   output = tokens.output + tokens.reasoning(reasoning 单独计费,费率同 output)
-//   total  = input + cached + output
-function parseMessageFile(fileText) {
-  if (!fileText) return null;
-  let data;
-  try {
-    data = JSON.parse(fileText);
-  } catch (e) {
-    return null;
-  }
+//   total  = tokens.total(含缓存读取)或 input + cached + output
+function parseMessageData(data, fallbackId) {
   if (!data || data.role !== 'assistant') return null;
   const completed = data.time && data.time.completed;
   if (!completed || !data.tokens) return null;
@@ -34,17 +28,28 @@ function parseMessageFile(fileText) {
   const cached = Number(cache.read) || 0;
   const output = (Number(tokens.output) || 0) + (Number(tokens.reasoning) || 0);
   return {
-    id: data.id || null,
+    id: data.id || fallbackId || null,
     ts: Number(completed) || null,
     model: data.modelID || null,
     usage: {
       input: input,
       cached: cached,
       output: output,
-      total: input + cached + output
+      total: Number(tokens.total) || (input + cached + output)
     },
     cost: Number(data.cost) || 0
   };
+}
+
+function parseMessageFile(fileText) {
+  if (!fileText) return null;
+  let data;
+  try {
+    data = JSON.parse(fileText);
+  } catch (e) {
+    return null;
+  }
+  return parseMessageData(data);
 }
 
 function walkJsonFiles(root, match) {
@@ -151,13 +156,53 @@ function rollupRecords(records) {
   return out;
 }
 
-// 增量扫描本机 opencode 会话,返回新增 UsageRecord[];并按日聚合增量合并进 store 键 'usageDaily'。
-// ctx = { store, ... }。root 可通过 store 键 'providers.opencode.localLogRoot' 覆盖(测试用)。
-function readLocalLog(ctx, opts) {
-  const store = ctx && ctx.store;
-  const root = (store && store.get('providers.opencode.localLogRoot')) || DEFAULT_ROOT();
-  if (!fs.existsSync(root)) return [];
+function mergeOpenCodeDaily(store, records) {
+  if (!store) return;
+  const daily = rollupRecords(records);
+  const usageDaily = store.get('usageDaily') || {};
+  Object.keys(usageDaily).forEach((k) => {
+    if (k.indexOf('opencode:') === 0) delete usageDaily[k];
+  });
+  Object.keys(daily).forEach((k) => { usageDaily[k] = daily[k]; });
+  store.set('usageDaily', usageDaily);
+}
 
+// SQLite 主路径:全量读取 message 表并重算 opencode 每日聚合(覆盖旧键,避免重复计数)。
+// 返回 records;打不开 DB 返回 null(调用方回退 JSON)。
+function readLocalLogFromDb(store, dbPath) {
+  let DatabaseSync = null;
+  try {
+    DatabaseSync = require('node:sqlite').DatabaseSync;
+  } catch (e) {
+    return null;
+  }
+  let db;
+  try {
+    db = new DatabaseSync(dbPath, { readOnly: true });
+  } catch (e) {
+    return null;
+  }
+  try {
+    const rows = db.prepare('SELECT id, time_created, data FROM message').all();
+    const records = [];
+    rows.forEach((row) => {
+      let data;
+      try { data = JSON.parse(row.data); } catch (e) { data = null; }
+      const rec = parseMessageData(data, row.id);
+      if (rec) records.push(rec);
+    });
+    mergeOpenCodeDaily(store, records);
+    return records;
+  } catch (e) {
+    return null;
+  } finally {
+    try { db.close(); } catch (e) {}
+  }
+}
+
+// JSON 回退路径:增量扫描 storage/message/**/*.json。
+function readLocalLogFromJson(ctx, store, root) {
+  if (!fs.existsSync(root)) return [];
   const records = scanMessageFiles({
     root: root,
     match: MATCH,
@@ -184,6 +229,22 @@ function readLocalLog(ctx, opts) {
     store.set('usageDaily', usageDaily);
   }
   return records;
+}
+
+// 读取本机 opencode 用量:优先 SQLite,JSON 回退。
+// ctx = { store, ... }。db 路径可经 'providers.opencode.dbPath' 覆盖;JSON 根经 'localLogRoot' 覆盖(测试用)。
+function readLocalLog(ctx, opts) {
+  const store = ctx && ctx.store;
+  const rootOverride = store && store.get('providers.opencode.localLogRoot');
+  if (rootOverride) {
+    return readLocalLogFromJson(ctx, store, rootOverride);
+  }
+  const dbPath = (store && store.get('providers.opencode.dbPath')) || DEFAULT_DB_PATH();
+  if (fs.existsSync(dbPath)) {
+    const records = readLocalLogFromDb(store, dbPath);
+    if (records) return records;
+  }
+  return readLocalLogFromJson(ctx, store, DEFAULT_ROOT());
 }
 
 // 从 store 键 'usageDaily' 读取 opencode 聚合,返回卡片展示数据(今日 + 累计)。
@@ -214,13 +275,16 @@ function getStats(ctx) {
 }
 
 module.exports = {
+  parseMessageData,
   parseMessageFile,
   scanMessageFiles,
   rollupRecords,
   mergeModelArrays,
   readLocalLog,
+  readLocalLogFromDb,
   getStats,
   DEFAULT_ROOT,
+  DEFAULT_DB_PATH,
   MATCH,
   CURSOR_KEY
 };
