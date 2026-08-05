@@ -125,7 +125,9 @@ function captureSession(ctx) {
       logger.log('[opencode-go] navigate:', url);
       const m = /(.*\/workspace\/[^/?#]+)/.exec(url);
       if (!m) return;
-      if (!/\/go(\/|$)/.test(m[1])) {
+      let pathname;
+      try { pathname = new URL(url).pathname; } catch (err) { return; }
+      if (!/\/go(\/|$)/.test(pathname)) {
         logger.log('[opencode-go] goto go page:', m[1] + '/go');
         win.loadURL(m[1] + '/go');
       }
