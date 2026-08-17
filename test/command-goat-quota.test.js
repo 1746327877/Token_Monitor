@@ -63,3 +63,31 @@ test('parseScrapedUsage returns null when nothing matches', () => {
   assert.equal(parseScrapedUsage(['没有任何用量数据']), null);
   assert.equal(parseScrapedUsage(['Something 32%']), null);
 });
+
+test('parseScrapedUsage captures the monthly credit pool from the Studio overview', () => {
+  const items = [
+    'MONTHLY USAGE $0.12 of $70 used this month'
+  ];
+  const quota = parseScrapedUsage(items);
+  assert.ok(quota);
+  assert.equal(quota.windows.length, 1);
+  const monthly = quota.windows[0];
+  assert.equal(monthly.kind, 'monthly');
+  assert.equal(monthly.used, 0.12);
+  assert.equal(monthly.limit, 70);
+  assert.equal(monthly.remaining, 70 - 0.12);
+  assert.equal(monthly.resetsAt, null);
+});
+
+test('parseScrapedUsage mixes monthly pool with 5h/weekly windows', () => {
+  const items = [
+    'MONTHLY USAGE $10 of $70 used this month',
+    '5-hour ███ 32% · resets in 3h 12m',
+    'Weekly ████ 41% · resets in 2d 4h'
+  ];
+  const quota = parseScrapedUsage(items);
+  assert.ok(quota);
+  assert.equal(quota.windows.length, 3);
+  const kinds = quota.windows.map((w) => w.kind).sort();
+  assert.deepEqual(kinds, ['5h', 'monthly', 'weekly']);
+});

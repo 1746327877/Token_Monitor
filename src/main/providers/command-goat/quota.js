@@ -35,7 +35,11 @@ function parseResetSeconds(text) {
   return total;
 }
 
-// 把抓取到的文本块归一化为 QuotaState(按 label 匹配窗口类型;百分比/重置时间从文本提取)。
+// 把抓取到的文本块归一化为 QuotaState。
+// 支持三种数据:
+//   1) 月度额度池: "MONTHLY USAGE $0.12 of $70 used this month" → monthly 窗口(used/limit)
+//   2) 5 小时窗口: "5-hour ███ 32% · resets in 3h 12m" → 5h 窗口
+//   3) 每周窗口:   "Weekly ████ 41% · resets in 2d 4h"   → weekly 窗口
 // items 支持字符串数组或 {label,text,value} 对象数组。
 function parseScrapedUsage(items, now) {
   if (!Array.isArray(items) || !items.length) return null;
@@ -45,6 +49,25 @@ function parseScrapedUsage(items, now) {
     const text = typeof item === 'string'
       ? item
       : String((item.label || '') + ' ' + (item.text || '') + ' ' + (item.value || ''));
+
+    // 月度额度池: "$X of $Y used" + month/月 关键词
+    const monthly = /\$\s*([\d.]+)\s*of\s*\$\s*([\d.]+)/i.exec(text);
+    if (monthly && /month|月/i.test(text)) {
+      const used = Math.max(0, parseFloat(monthly[1]) || 0);
+      const limit = Math.max(0, parseFloat(monthly[2]) || 0);
+      if (limit > 0) {
+        windows.push({
+          kind: 'monthly',
+          name: '本月额度',
+          used: used,
+          limit: limit,
+          remaining: Math.max(0, limit - used),
+          resetsAt: null
+        });
+        return;
+      }
+    }
+
     const pct = parsePercent(text);
     if (pct === null) return;
     const resetSec = parseResetSeconds(text);

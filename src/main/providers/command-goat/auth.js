@@ -37,8 +37,8 @@ function writeCred(store, cred) {
   if (store) store.set(CRED_KEY, cred);
 }
 
-// 抓取用量仪表的内嵌脚本:先按行匹配窗口标签(5-hour/Weekly),再兜底扫含百分比+重置的叶子节点。
-// 附带页面标题与 body 文本片段用于诊断。
+// 抓取用量仪表的内嵌脚本:按行扫描窗口标签(monthly/5-hour/Weekly),把标签后几行拼成完整文本块;
+// 再兜底扫含百分比+重置的叶子节点。附带页面标题/URL/正文片段用于诊断。
 function scrapeUsageScript() {
   return '(() => {' +
     'var items = [];' +
@@ -49,14 +49,19 @@ function scrapeUsageScript() {
     '  seen[text] = true;' +
     '  items.push(text);' +
     '}' +
+    'var isMonthly = /monthly|month|月/i;' +
     'var is5h = /5-?hour|5\\s*小\\s*时/i;' +
     'var isWeekly = /weekly|本\\s*周/i;' +
     'var bodyText = document.body ? document.body.innerText : "";' +
-    'bodyText.split("\\n").forEach(function (line) {' +
-    '  line = line.trim();' +
-    '  if (!line) return;' +
-    '  if (is5h.test(line) || isWeekly.test(line)) add(line);' +
-    '});' +
+    'var lines = bodyText.split("\\n").map(function (l) { return l.trim(); }).filter(Boolean);' +
+    'for (var i = 0; i < lines.length; i++) {' +
+    '  if (!isMonthly.test(lines[i]) && !is5h.test(lines[i]) && !isWeekly.test(lines[i])) continue;' +
+    '  var block = lines[i];' +
+    '  for (var j = i + 1; j < Math.min(lines.length, i + 5); j++) {' +
+    '    block += " " + lines[j];' +
+    '  }' +
+    '  add(block);' +
+    '}' +
     'if (!items.length) {' +
     '  document.querySelectorAll("*").forEach(function (el) {' +
     '    if (el.children.length > 0) return;' +
@@ -176,7 +181,7 @@ async function fetchQuota(ctx) {
   if (cachedQuota && now - cachedAt < CACHE_MS) return cachedQuota;
   const win = new BrowserWindow(windowOptions({ show: false }));
   try {
-    await win.loadURL('https://commandcode.ai/usage');
+    await win.loadURL(STUDIO_URL);
     const result = await waitForUsage(win, 25000);
     if (!result || !result.items || !result.items.length) return null;
     const quota = parseScrapedUsage(result.items);
