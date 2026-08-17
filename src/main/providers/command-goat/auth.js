@@ -144,8 +144,17 @@ function captureSession(ctx) {
     win.webContents.on('did-navigate', (e, url) => {
       logger.log('[command-goat] navigate:', url);
     });
-    win.webContents.on('did-fail-load', (event, code, desc) => {
-      logger.log('[command-goat] did-fail-load:', code, desc);
+    win.webContents.on('did-stop-loading', async () => {
+      try {
+        const info = await win.webContents.executeJavaScript('JSON.stringify({ title: document.title, url: location.href, text: (document.body ? document.body.innerText : "").slice(0, 300) })');
+        logger.log('[command-goat] did-stop-loading:', info);
+      } catch (err) {}
+    });
+    win.webContents.on('render-process-gone', (e, details) => {
+      logger.log('[command-goat] render-process-gone:', JSON.stringify(details));
+    });
+    win.webContents.on('did-fail-load', (event, code, desc, url) => {
+      logger.log('[command-goat] did-fail-load:', code, desc, url);
       if (code === -3) return;
       if (!settled) fail(new Error('登录窗口加载失败: ' + desc));
     });
