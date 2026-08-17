@@ -17,6 +17,10 @@ export function getOpenCodeStats() {
   return api.invoke('get:opencode-stats');
 }
 
+export function getCommandGoatStats() {
+  return api.invoke('get:command-goat-stats');
+}
+
 export function getBounds() {
   return api.invoke('get:bounds');
 }

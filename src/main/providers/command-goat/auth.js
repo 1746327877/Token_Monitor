@@ -1,11 +1,12 @@
 // Command Goat Studio 会话:弹窗登录 commandcode.ai,抓取 Studio 顶部用量仪表 DOM。
 // 会话 cookie 由持久化 partition('persist:commandcode-studio')保存;轮询用隐藏窗口 + 缓存。
 const { BrowserWindow } = require('electron');
-const { parseScrapedUsage, CRED_KEY } = require('./quota');
+const { parseScrapedUsage, parseScrapedStats, CRED_KEY } = require('./quota');
 
 const STUDIO_URL = 'https://commandcode.ai/studio/';
 const PARTITION = 'persist:commandcode-studio';
 const CACHE_MS = 5 * 60 * 1000;
+const STATS_KEY = 'providers.command-goat.stats';
 
 let cachedQuota = null;
 let cachedAt = 0;
@@ -37,6 +38,19 @@ function writeCred(store, cred) {
   if (store) store.set(CRED_KEY, cred);
 }
 
+function saveStats(store, items) {
+  if (!store) return;
+  const stats = parseScrapedStats(items);
+  store.set(STATS_KEY, stats);
+}
+
+// 读取最近一次抓取的使用统计(卡片展示)。
+function getStats(ctx) {
+  const store = ctx && ctx.store;
+  const stats = (store && store.get(STATS_KEY)) || null;
+  return stats || { tokens: 0, runs: 0, cost: 0 };
+}
+
 // 抓取用量仪表的内嵌脚本:按行扫描窗口标签(monthly/5-hour/Weekly),把标签后几行拼成完整文本块;
 // 再兜底扫含百分比+重置的叶子节点。附带页面标题/URL/正文片段用于诊断。
 function scrapeUsageScript() {
@@ -52,10 +66,12 @@ function scrapeUsageScript() {
     'var isMonthly = /monthly|month|月/i;' +
     'var is5h = /5-?hour|5\\s*小\\s*时/i;' +
     'var isWeekly = /weekly|本\\s*周/i;' +
+    'var isTokens = /total\\s*tokens|tokens/i;' +
+    'var isRuns = /total\\s*runs|runs/i;' +
     'var bodyText = document.body ? document.body.innerText : "";' +
     'var lines = bodyText.split("\\n").map(function (l) { return l.trim(); }).filter(Boolean);' +
     'for (var i = 0; i < lines.length; i++) {' +
-    '  if (!isMonthly.test(lines[i]) && !is5h.test(lines[i]) && !isWeekly.test(lines[i])) continue;' +
+    '  if (!isMonthly.test(lines[i]) && !is5h.test(lines[i]) && !isWeekly.test(lines[i]) && !isTokens.test(lines[i]) && !isRuns.test(lines[i])) continue;' +
     '  var block = lines[i];' +
     '  for (var j = i + 1; j < Math.min(lines.length, i + 5); j++) {' +
     '    block += " " + lines[j];' +
@@ -140,6 +156,7 @@ function captureSession(ctx) {
         return;
       }
       logger.log('[command-goat] captured usage from DOM, windows:', quota.windows.map((w) => w.kind).join(','));
+      saveStats(ctx && ctx.store, result.items);
       finish(quota);
     }
 
@@ -188,6 +205,7 @@ async function fetchQuota(ctx) {
     if (quota) {
       cachedQuota = quota;
       cachedAt = Date.now();
+      saveStats(store, result.items);
     }
     return quota;
   } catch (e) {
@@ -197,4 +215,4 @@ async function fetchQuota(ctx) {
   }
 }
 
-module.exports = { captureSession, createSessionWindow, fetchQuota, readCred, writeCred, scrapeUsageScript, STUDIO_URL, PARTITION };
+module.exports = { captureSession, createSessionWindow, fetchQuota, readCred, writeCred, getStats, saveStats, scrapeUsageScript, STUDIO_URL, PARTITION, STATS_KEY };

@@ -89,4 +89,34 @@ function parseScrapedUsage(items, now) {
   return makeQuotaState('command-goat', 'subscription', windows, null, 'Command Goat', null, nowMs);
 }
 
-module.exports = { parseScrapedUsage, parsePercent, parseResetSeconds, LIMITS, CRED_KEY };
+// 从抓取文本提取月度使用统计:{ tokens, runs, cost }。
+// 概览页: "TOTAL TOKENS 471.4K tokens" / "TOTAL RUNS 1 runs" / "MONTHLY USAGE $0.12 of $70 used this month"
+function parseScrapedStats(items, now) {
+  const text = (Array.isArray(items) ? items : [])
+    .map((item) => (typeof item === 'string' ? item : String((item.label || '') + ' ' + (item.text || '') + ' ' + (item.value || ''))))
+    .join(' ');
+
+  const tokens = parseTokenCount(text);
+  const runsMatch = /total\s+runs\s*(\d+)/i.exec(text);
+  const monthly = /\$\s*([\d.]+)\s*of\s*\$\s*([\d.]+)/i.exec(text);
+
+  return {
+    tokens: tokens,
+    runs: runsMatch ? parseInt(runsMatch[1], 10) : 0,
+    cost: monthly ? Math.max(0, parseFloat(monthly[1]) || 0) : 0
+  };
+}
+
+// 解析带单位 token 数:"471.4K" → 471400,"12.5M" → 12500000。
+function parseTokenCount(text) {
+  const m = /total\s+tokens\s*([\d.]+)\s*([KMBkmb])?/i.exec(text);
+  if (!m) return 0;
+  const n = parseFloat(m[1]) || 0;
+  const unit = (m[2] || '').toUpperCase();
+  if (unit === 'K') return Math.round(n * 1000);
+  if (unit === 'M') return Math.round(n * 1000000);
+  if (unit === 'B') return Math.round(n * 1000000000);
+  return Math.round(n);
+}
+
+module.exports = { parseScrapedUsage, parseScrapedStats, parsePercent, parseResetSeconds, parseTokenCount, LIMITS, CRED_KEY };

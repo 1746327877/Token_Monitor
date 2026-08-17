@@ -1,6 +1,5 @@
-// Command Goat Provider 适配器(quota 通道):登录 Studio 后抓取用量仪表 DOM。
-const { fetchQuota } = require('./auth');
-const { readCred } = require('./auth');
+// Command Goat Provider 适配器(quota + 使用统计):登录 Studio 后抓取用量仪表 DOM。
+const { fetchQuota, getStats, readCred } = require('./auth');
 
 module.exports = {
   id: 'command-goat',
@@ -13,5 +12,7 @@ module.exports = {
     return 'ok';
   },
 
-  fetchQuota
+  fetchQuota,
+
+  getStats
 };

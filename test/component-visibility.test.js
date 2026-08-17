@@ -49,6 +49,7 @@ test('platform toggles hide that platform component cards', async () => {
 
   const hideGoat = visibleComponentIds({ components: { platformCommandGoat: false } });
   assert.equal(hideGoat.includes('quota-command-goat'), false);
+  assert.equal(hideGoat.includes('command-goat-stats-card'), false);
   assert.equal(hideGoat.includes('quota-opencode-go'), true);
 
   const hideDeepseek = visibleComponentIds({ components: { platformDeepseek: false } });

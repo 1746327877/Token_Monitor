@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld('api', {
       'get:providers',
       'get:heatmap',
       'get:opencode-stats',
+      'get:command-goat-stats',
       'get:bounds',
       'get:session-state',
       'window:commit'

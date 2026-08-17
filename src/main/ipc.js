@@ -158,6 +158,14 @@ module.exports = function setupIPC(deps) {
     loginCommandGoat();
   });
 
+  ipcMain.handle('get:command-goat-stats', () => {
+    const provider = deps.registry.get('command-goat');
+    if (!provider || typeof provider.getStats !== 'function') {
+      return { tokens: 0, runs: 0, cost: 0 };
+    }
+    return provider.getStats({ store: deps.store, logger: console });
+  });
+
   ipcMain.on('provider:reauth', (event, providerId) => {
     const login = CONSOLE_LOGINS[providerId];
     if (login) {

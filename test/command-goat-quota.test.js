@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { parseScrapedUsage, parsePercent, parseResetSeconds, LIMITS } = require('../src/main/providers/command-goat/quota');
+const { parseScrapedUsage, parseScrapedStats, parsePercent, parseResetSeconds, LIMITS } = require('../src/main/providers/command-goat/quota');
 
 test('parsePercent reads percentage text', () => {
   assert.equal(parsePercent('32%'), 32);
@@ -90,4 +90,22 @@ test('parseScrapedUsage mixes monthly pool with 5h/weekly windows', () => {
   assert.equal(quota.windows.length, 3);
   const kinds = quota.windows.map((w) => w.kind).sort();
   assert.deepEqual(kinds, ['5h', 'monthly', 'weekly']);
+});
+
+test('parseScrapedStats extracts tokens/runs/cost from the Studio overview', () => {
+  const items = [
+    'MONTHLY USAGE $0.12 of $70 used this month',
+    'TOTAL TOKENS 471.4K tokens',
+    'TOTAL RUNS 1 runs'
+  ];
+  const stats = parseScrapedStats(items);
+  assert.equal(stats.tokens, 471400);
+  assert.equal(stats.runs, 1);
+  assert.equal(stats.cost, 0.12);
+
+  const million = parseScrapedStats(['TOTAL TOKENS 12.5M tokens']);
+  assert.equal(million.tokens, 12500000);
+  const none = parseScrapedStats([]);
+  assert.equal(none.tokens, 0);
+  assert.equal(none.runs, 0);
 });

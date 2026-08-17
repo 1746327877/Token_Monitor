@@ -50,6 +50,27 @@
       }
     },
     {
+      id: 'command-goat-stats-card',
+      label: 'Command Goat 使用',
+      settingsKey: 'components.commandGoatStatsCard',
+      defaultVisible: true,
+      aspectRatio: 1,
+      presets: {
+        compact: [
+          { name: 'card', w: 4, h: 4 },
+          { name: 'wide', w: 6, h: 4 }
+        ],
+        wide: [
+          { name: 'card', w: 4, h: 4 },
+          { name: 'wide', w: 6, h: 4 }
+        ]
+      },
+      defaultPlacement: {
+        compact: { x: 0, y: 14, w: 4, h: 4, preset: 'card' },
+        wide: { x: 0, y: 14, w: 4, h: 4, preset: 'card' }
+      }
+    },
+    {
       id: 'quota-codex',
       label: 'Codex 额度',
       settingsKey: 'components.quotaCodex',
@@ -67,8 +88,8 @@
         ]
       },
       defaultPlacement: {
-        compact: { x: 0, y: 14, w: 12, h: 7, preset: 'full' },
-        wide: { x: 0, y: 14, w: 12, h: 7, preset: 'full' }
+        compact: { x: 0, y: 18, w: 12, h: 7, preset: 'full' },
+        wide: { x: 0, y: 18, w: 12, h: 7, preset: 'full' }
       }
     },
     {
