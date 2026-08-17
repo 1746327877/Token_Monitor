@@ -8,7 +8,7 @@ files:
   - node_modules/**/*
   - package.json
 win:
-  icon: assets/icon.ico
+  icon: src/renderer/assets/icon.png
   target: nsis
 mac:
   icon: assets/icon.icns
