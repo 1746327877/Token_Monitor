@@ -12,7 +12,8 @@ const PROVIDER_OPTS = [
   { id: 'deepseek', label: 'DeepSeek' },
   { id: 'codex', label: 'Codex' },
   { id: 'kimi', label: 'Kimi' },
-  { id: 'opencode', label: 'OpenCode' }
+  { id: 'opencode', label: 'OpenCode' },
+  { id: 'command-goat', label: 'Command Goat' }
 ];
 
 function dateLabel(date) {

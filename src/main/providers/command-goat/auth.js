@@ -2,6 +2,7 @@
 // 会话 cookie 由持久化 partition('persist:commandcode-studio')保存;轮询用隐藏窗口 + 缓存。
 const { BrowserWindow } = require('electron');
 const { parseScrapedUsage, parseScrapedStats, CRED_KEY } = require('./quota');
+const { localDayStr } = require('../../core/locallog');
 
 const STUDIO_URL = 'https://commandcode.ai/studio/';
 const PARTITION = 'persist:commandcode-studio';
@@ -42,6 +43,20 @@ function saveStats(store, items) {
   if (!store) return;
   const stats = parseScrapedStats(items);
   store.set(STATS_KEY, stats);
+  // 把月度 token 总量计入"今天"的每日消耗(usageDaily),让每日 Token 消耗图/热力图显示 Command Goat。
+  // Studio 只有月度总量,无每日明细,故按"本月累计"记在当天。
+  const today = localDayStr(Date.now());
+  const usageDaily = store.get('usageDaily') || {};
+  usageDaily['command-goat:' + today] = {
+    input: 0,
+    cached: 0,
+    output: stats.tokens,
+    total: stats.tokens,
+    cost: stats.cost,
+    messages: stats.runs,
+    models: []
+  };
+  store.set('usageDaily', usageDaily);
 }
 
 // 读取最近一次抓取的使用统计(卡片展示)。
