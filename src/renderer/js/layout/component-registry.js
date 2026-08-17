@@ -28,6 +28,28 @@
       }
     },
     {
+      id: 'quota-command-goat',
+      label: 'Command Goat 额度',
+      settingsKey: 'components.quotaCommandGoat',
+      defaultVisible: true,
+      presets: {
+        compact: [
+          { name: 'full', w: 12, h: 7 },
+          { name: 'half', w: 6, h: 7 },
+          { name: 'tall', w: 12, h: 9 }
+        ],
+        wide: [
+          { name: 'full', w: 12, h: 7 },
+          { name: 'half', w: 6, h: 7 },
+          { name: 'tall', w: 12, h: 9 }
+        ]
+      },
+      defaultPlacement: {
+        compact: { x: 0, y: 7, w: 12, h: 7, preset: 'full' },
+        wide: { x: 0, y: 7, w: 12, h: 7, preset: 'full' }
+      }
+    },
+    {
       id: 'quota-codex',
       label: 'Codex 额度',
       settingsKey: 'components.quotaCodex',
@@ -45,8 +67,8 @@
         ]
       },
       defaultPlacement: {
-        compact: { x: 0, y: 7, w: 12, h: 7, preset: 'full' },
-        wide: { x: 0, y: 7, w: 12, h: 7, preset: 'full' }
+        compact: { x: 0, y: 14, w: 12, h: 7, preset: 'full' },
+        wide: { x: 0, y: 14, w: 12, h: 7, preset: 'full' }
       }
     },
     {

@@ -1,6 +1,6 @@
 // 组件注册表数据(从 src/renderer/js/layout/component-registry.js 逐字迁移,policy 只依赖 list/get)。
 // policy.js 与 layout-policy.test.js 共用的唯一数据源;gridstack 组件类型映射见 Dashboard.jsx。
-// 注册表顺序 = 默认布局顺序;OpenCode Go 额度置顶。
+// 注册表顺序 = 默认布局顺序;OpenCode Go / Command Goat 额度置顶。
 
 const components = [
   {
@@ -26,6 +26,28 @@ const components = [
     }
   },
   {
+    id: 'quota-command-goat',
+    label: 'Command Goat 额度',
+    settingsKey: 'components.quotaCommandGoat',
+    defaultVisible: true,
+    presets: {
+      compact: [
+        { name: 'full', w: 12, h: 7 },
+        { name: 'half', w: 6, h: 7 },
+        { name: 'tall', w: 12, h: 9 }
+      ],
+      wide: [
+        { name: 'full', w: 12, h: 7 },
+        { name: 'half', w: 6, h: 7 },
+        { name: 'tall', w: 12, h: 9 }
+      ]
+    },
+    defaultPlacement: {
+      compact: { x: 0, y: 7, w: 12, h: 7, preset: 'full' },
+      wide: { x: 0, y: 7, w: 12, h: 7, preset: 'full' }
+    }
+  },
+  {
     id: 'quota-codex',
     label: 'Codex 额度',
     settingsKey: 'components.quotaCodex',
@@ -43,8 +65,8 @@ const components = [
       ]
     },
     defaultPlacement: {
-      compact: { x: 0, y: 7, w: 12, h: 7, preset: 'full' },
-      wide: { x: 0, y: 7, w: 12, h: 7, preset: 'full' }
+      compact: { x: 0, y: 14, w: 12, h: 7, preset: 'full' },
+      wide: { x: 0, y: 14, w: 12, h: 7, preset: 'full' }
     }
   },
   {
@@ -65,8 +87,8 @@ const components = [
       ]
     },
     defaultPlacement: {
-      compact: { x: 0, y: 14, w: 12, h: 7, preset: 'full' },
-      wide: { x: 0, y: 14, w: 12, h: 7, preset: 'full' }
+      compact: { x: 0, y: 21, w: 12, h: 7, preset: 'full' },
+      wide: { x: 0, y: 21, w: 12, h: 7, preset: 'full' }
     }
   },
   {
@@ -86,8 +108,8 @@ const components = [
       ]
     },
     defaultPlacement: {
-      compact: { x: 0, y: 21, w: 4, h: 4, preset: 'card' },
-      wide: { x: 0, y: 21, w: 4, h: 4, preset: 'card' }
+      compact: { x: 0, y: 28, w: 4, h: 4, preset: 'card' },
+      wide: { x: 0, y: 28, w: 4, h: 4, preset: 'card' }
     }
   },
   {
@@ -107,8 +129,8 @@ const components = [
       ]
     },
     defaultPlacement: {
-      compact: { x: 4, y: 21, w: 4, h: 4, preset: 'card' },
-      wide: { x: 4, y: 21, w: 4, h: 4, preset: 'card' }
+      compact: { x: 4, y: 28, w: 4, h: 4, preset: 'card' },
+      wide: { x: 4, y: 28, w: 4, h: 4, preset: 'card' }
     }
   },
   {
@@ -128,8 +150,8 @@ const components = [
       ]
     },
     defaultPlacement: {
-      compact: { x: 8, y: 21, w: 4, h: 4, preset: 'card' },
-      wide: { x: 8, y: 21, w: 4, h: 4, preset: 'card' }
+      compact: { x: 8, y: 28, w: 4, h: 4, preset: 'card' },
+      wide: { x: 8, y: 28, w: 4, h: 4, preset: 'card' }
     }
   },
   {
@@ -152,8 +174,8 @@ const components = [
       ]
     },
     defaultPlacement: {
-      compact: { x: 0, y: 25, w: 12, h: 6, preset: 'full' },
-      wide: { x: 0, y: 25, w: 12, h: 6, preset: 'full' }
+      compact: { x: 0, y: 32, w: 12, h: 6, preset: 'full' },
+      wide: { x: 0, y: 32, w: 12, h: 6, preset: 'full' }
     }
   },
   {
@@ -176,8 +198,8 @@ const components = [
       ]
     },
     defaultPlacement: {
-      compact: { x: 0, y: 31, w: 12, h: 6, preset: 'full' },
-      wide: { x: 0, y: 31, w: 12, h: 6, preset: 'full' }
+      compact: { x: 0, y: 38, w: 12, h: 6, preset: 'full' },
+      wide: { x: 0, y: 38, w: 12, h: 6, preset: 'full' }
     }
   },
   {
@@ -200,8 +222,8 @@ const components = [
       ]
     },
     defaultPlacement: {
-      compact: { x: 0, y: 37, w: 12, h: 6, preset: 'full' },
-      wide: { x: 0, y: 37, w: 12, h: 6, preset: 'full' }
+      compact: { x: 0, y: 44, w: 12, h: 6, preset: 'full' },
+      wide: { x: 0, y: 44, w: 12, h: 6, preset: 'full' }
     }
   },
   {
@@ -224,8 +246,8 @@ const components = [
       ]
     },
     defaultPlacement: {
-      compact: { x: 0, y: 43, w: 12, h: 6, preset: 'full' },
-      wide: { x: 0, y: 43, w: 12, h: 6, preset: 'full' }
+      compact: { x: 0, y: 50, w: 12, h: 6, preset: 'full' },
+      wide: { x: 0, y: 50, w: 12, h: 6, preset: 'full' }
     }
   },
   {
@@ -246,8 +268,8 @@ const components = [
       ]
     },
     defaultPlacement: {
-      compact: { x: 0, y: 49, w: 12, h: 10, preset: 'full' },
-      wide: { x: 0, y: 49, w: 12, h: 10, preset: 'full' }
+      compact: { x: 0, y: 56, w: 12, h: 10, preset: 'full' },
+      wide: { x: 0, y: 56, w: 12, h: 10, preset: 'full' }
     }
   },
   {
@@ -267,8 +289,8 @@ const components = [
       ]
     },
     defaultPlacement: {
-      compact: { x: 0, y: 59, w: 4, h: 4, preset: 'card' },
-      wide: { x: 0, y: 59, w: 4, h: 4, preset: 'card' }
+      compact: { x: 0, y: 66, w: 4, h: 4, preset: 'card' },
+      wide: { x: 0, y: 66, w: 4, h: 4, preset: 'card' }
     }
   }
 ];

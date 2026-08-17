@@ -13,6 +13,7 @@ const PLATFORM_KEYS = {
   'quota-codex': 'platformCodex',
   'quota-kimi': 'platformKimi',
   'quota-opencode-go': 'platformOpenCodeGo',
+  'quota-command-goat': 'platformCommandGoat',
   'balance-card': 'platformDeepseek',
   'today-cost-card': 'platformDeepseek',
   'cache-rate-card': 'platformDeepseek',

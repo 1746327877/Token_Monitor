@@ -9,6 +9,7 @@ const codexProvider = require('./providers/codex');
 const kimiProvider = require('./providers/kimi');
 const opencodeProvider = require('./providers/opencode');
 const opencodeGoProvider = require('./providers/opencode-go');
+const commandGoatProvider = require('./providers/command-goat');
 const { startScheduler } = require('./core/scheduler');
 const setupIPC = require('./ipc');
 const { captureSession } = require('./providers/deepseek/session');
@@ -474,6 +475,7 @@ app.whenReady().then(() => {
   registry.register(kimiProvider);
   registry.register(opencodeProvider);
   registry.register(opencodeGoProvider);
+  registry.register(commandGoatProvider);
   startSchedulerRuntime();
 
   setupIPC({

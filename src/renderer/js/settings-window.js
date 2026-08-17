@@ -14,6 +14,7 @@
       '<span class="session-status"><span class="status-dot offline" id="sessionStatusDot"></span><span id="sessionStatusText">未登录或会话已过期</span></span></div>' +
       '<div class="setting-row"><button class="btn btn-primary" id="sessionReloginBtn" style="width:100%;">登录平台获取用量</button></div>' +
       '<div class="setting-row"><button class="btn btn-secondary" id="goLoginBtn" style="width:100%;">登录 OpenCode Go 获取额度</button></div>' +
+      '<div class="setting-row"><button class="btn btn-secondary" id="goatLoginBtn" style="width:100%;">登录 Command Goat 获取额度</button></div>' +
       '</div>';
   }
 
@@ -97,6 +98,11 @@
     var goLoginBtn = document.getElementById('goLoginBtn');
     if (goLoginBtn) {
       goLoginBtn.addEventListener('click', function () { window.api.send('login:opencode-go'); });
+    }
+
+    var goatLoginBtn = document.getElementById('goatLoginBtn');
+    if (goatLoginBtn) {
+      goatLoginBtn.addEventListener('click', function () { window.api.send('login:command-goat'); });
     }
 
     document.querySelectorAll('input[data-key]').forEach(function (el) {

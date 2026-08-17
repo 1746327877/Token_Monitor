@@ -5,6 +5,7 @@ const { buildHeatmap } = require('./core/heatmap');
 const { sanitizeSettings, isWritableSettingKey, resolveWritableSettingKey } = require('./core/settings-security');
 const { resetSettingsStore } = require('./core/settings-reset');
 const opencodeGoAuth = require('./providers/opencode-go/auth');
+const commandGoatAuth = require('./providers/command-goat/auth');
 
 function deepseekApiKeyCtx(deps, apiKey) {
   return {
@@ -97,7 +98,22 @@ module.exports = function setupIPC(deps) {
     return provider.getStats({ store: deps.store, logger: console });
   });
 
-  /* ======== OpenCode Go 额度登录(console 捕获) ======== */
+  /* ======== OpenCode Go / Command Goat 额度登录(console/studio 捕获) ======== */
+
+  function sessionWindow(title) {
+    return new BrowserWindow({
+      width: 1000,
+      height: 720,
+      show: true,
+      center: true,
+      title: title,
+      webPreferences: {
+        partition: 'persist:opencode-console',
+        contextIsolation: true,
+        nodeIntegration: false
+      }
+    });
+  }
 
   async function loginOpenCodeGo() {
     const provider = deps.registry.get('opencode-go');
@@ -106,18 +122,7 @@ module.exports = function setupIPC(deps) {
       await opencodeGoAuth.captureSession({
         store: deps.store,
         logger: console,
-        createSessionWindow: () => new BrowserWindow({
-          width: 920,
-          height: 700,
-          show: true,
-          center: true,
-          title: '登录 OpenCode Go(console)',
-          webPreferences: {
-            partition: 'persist:opencode-console',
-            contextIsolation: true,
-            nodeIntegration: false
-          }
-        })
+        createSessionWindow: () => sessionWindow('登录 OpenCode Go(console)')
       });
       if (deps.scheduler) deps.scheduler.poll('opencode-go', 'quota');
     } catch (e) {
@@ -125,13 +130,38 @@ module.exports = function setupIPC(deps) {
     }
   }
 
+  async function loginCommandGoat() {
+    const provider = deps.registry.get('command-goat');
+    if (!provider) return;
+    try {
+      await commandGoatAuth.captureSession({
+        store: deps.store,
+        logger: console,
+        createSessionWindow: () => sessionWindow('登录 Command Code Studio')
+      });
+      if (deps.scheduler) deps.scheduler.poll('command-goat', 'quota');
+    } catch (e) {
+      console.error('[command-goat] login failed:', e && e.message ? e.message : e);
+    }
+  }
+
+  const CONSOLE_LOGINS = {
+    'opencode-go': loginOpenCodeGo,
+    'command-goat': loginCommandGoat
+  };
+
   ipcMain.on('login:opencode-go', () => {
     loginOpenCodeGo();
   });
 
+  ipcMain.on('login:command-goat', () => {
+    loginCommandGoat();
+  });
+
   ipcMain.on('provider:reauth', (event, providerId) => {
-    if (providerId === 'opencode-go') {
-      loginOpenCodeGo();
+    const login = CONSOLE_LOGINS[providerId];
+    if (login) {
+      login();
     } else if (deps.scheduler) {
       deps.scheduler.pollAll();
     }

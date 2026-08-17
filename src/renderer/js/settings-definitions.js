@@ -13,6 +13,7 @@ var windowDefinitions = [
 
 var platformDefinitions = [
   { group: '平台', key: 'components.platformOpenCodeGo', type: 'toggle', label: 'OpenCode Go', default: true },
+  { group: '平台', key: 'components.platformCommandGoat', type: 'toggle', label: 'Command Goat', default: true },
   { group: '平台', key: 'components.platformCodex', type: 'toggle', label: 'Codex', default: true },
   { group: '平台', key: 'components.platformKimi', type: 'toggle', label: 'Kimi', default: true },
   { group: '平台', key: 'components.platformDeepseek', type: 'toggle', label: 'DeepSeek', default: true },

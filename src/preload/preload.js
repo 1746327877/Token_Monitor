@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('api', {
       'settings:reset',
       'login:submit',
       'login:opencode-go',
+      'login:command-goat',
       'provider:reauth',
       'window:minimize',
       'window:close',
