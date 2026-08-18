@@ -15,8 +15,8 @@ test('parseResetSeconds handles cli and zh/en formats', () => {
   assert.equal(parseResetSeconds('resets in 3h 12m'), 3 * 3600 + 12 * 60);
   assert.equal(parseResetSeconds('resets in 2d 4h'), 2 * 86400 + 4 * 3600);
   assert.equal(parseResetSeconds('重置时间: 3 小时 12 分钟'), 3 * 3600 + 12 * 60);
-  assert.equal(parseResetSeconds('2 天 4 小时'), 2 * 86400 + 4 * 3600);
-  assert.equal(parseResetSeconds('90m'), 90 * 60);
+  assert.equal(parseResetSeconds('重置于 2 天 4 小时'), 2 * 86400 + 4 * 3600);
+  assert.equal(parseResetSeconds('resets in 90m'), 90 * 60);
   assert.equal(parseResetSeconds(''), 0);
 });
 
@@ -28,6 +28,14 @@ test('parseResetSeconds handles absolute times', () => {
   assert.equal(parseResetSeconds('resets at 9:00 AM', now), 23 * 3600);
   // 完整日期时间
   assert.equal(parseResetSeconds('resets on 2026-08-20 12:00', now), 2 * 86400 + 2 * 3600);
+});
+
+test('parseResetSeconds ignores dates not tied to a reset keyword', () => {
+  const now = new Date(2026, 7, 18, 10, 0, 0).getTime();
+  // 块里混入的账单周期日期,没有 reset/重置 关键词 → 不解析
+  assert.equal(parseResetSeconds('Weekly usage billing cycle 2026-10-19 07:02 next payment', now), 0);
+  // 重置关键词后面的才是正确时间
+  assert.equal(parseResetSeconds('Weekly usage resets on 2026-08-20 12:00 billing 2026-10-19', now), 2 * 86400 + 2 * 3600);
 });
 
 test('parseScrapedUsage maps 5-hour and weekly meters into quota windows', () => {

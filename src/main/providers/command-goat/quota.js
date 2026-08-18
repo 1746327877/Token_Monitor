@@ -18,20 +18,28 @@ function parsePercent(text) {
 }
 
 // 解析重置时间文本 → 距现在的秒数。
+// 只认"重置关键词(reset/重置/renew/到期/下次)"之后的时间,避免误抓块内其他日期(如账单周期)。
 // 支持:
-//   相对时长: "3h 12m" / "2d 4h" / "3 小时 12 分钟" / "2 天 4 小时" / "few seconds"/"几秒"
-//   绝对时刻: "resets at 3:00 PM" / "at 18:00" / "2026-08-18 18:00" / "今天 18:00"(距 now 换算秒数)
+//   相对时长: "resets in 3h 12m" / "resets in 2d 4h" / "重置时间: 3 小时 12 分钟"
+//   绝对时刻: "resets at 3:00 PM" / "resets on 2026-08-20 12:00" / "重置于 18:00"
 function parseResetSeconds(text, now) {
   const s = String(text || '');
   const nowMs = now || Date.now();
-  if (/few second|几秒/i.test(s)) return 0;
+
+  // 找到重置关键词,取其后的文本
+  const kw = /(resets?|reset|renew|renewal|重置|到期|下次)/i.exec(s);
+  if (!kw) return 0;
+  const tail = s.slice((kw.index || 0) + kw[0].length);
+  const clean = tail.replace(/^(?:in|at|on|于|在|:|\s)+/i, '');
+
+  if (/few second|几秒/i.test(clean)) return 0;
 
   // 相对时长(优先,避免 "2h" 被绝对时间误读)
   let total = 0;
   let matchedDuration = false;
   const re = /(\d+)\s*(天|小时|分钟|day|hour|minute|[dhms])/gi;
   let m;
-  while ((m = re.exec(s))) {
+  while ((m = re.exec(clean))) {
     const n = parseInt(m[1], 10);
     const unit = m[2].toLowerCase();
     if (unit.indexOf('天') !== -1 || unit === 'd' || unit.indexOf('day') === 0) total += n * 86400;
@@ -42,8 +50,8 @@ function parseResetSeconds(text, now) {
   }
   if (matchedDuration && total > 0) return total;
 
-  // 完整日期时间: 2026-08-18 18:00 / 2026-08-18T18:00
-  const dt = /(\d{4})-(\d{1,2})-(\d{1,2})[T\s]+(\d{1,2}):(\d{2})/.exec(s);
+  // 完整日期时间: 2026-08-20 12:00 / 2026-08-20T12:00
+  const dt = /(\d{4})-(\d{1,2})-(\d{1,2})[T\s]+(\d{1,2}):(\d{2})/.exec(clean);
   if (dt) {
     const target = new Date(
       parseInt(dt[1], 10), parseInt(dt[2], 10) - 1, parseInt(dt[3], 10),
@@ -52,8 +60,8 @@ function parseResetSeconds(text, now) {
     return Math.max(0, Math.round((target - nowMs) / 1000));
   }
 
-  // 当天时刻: "3:00 PM" / "15:00" / "at 18:00" / "18:00"
-  const hm = /(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?/.exec(s);
+  // 当天时刻: "3:00 PM" / "15:00" / "18:00"(已过 → 明天同一时刻)
+  const hm = /(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?/.exec(clean);
   if (hm) {
     let hour = parseInt(hm[1], 10);
     const minute = parseInt(hm[2], 10);
@@ -64,7 +72,7 @@ function parseResetSeconds(text, now) {
     const target = new Date(nowMs);
     target.setHours(hour, minute, 0, 0);
     let diff = Math.round((target.getTime() - nowMs) / 1000);
-    if (diff <= 0) diff += 24 * 3600; // 已过 → 明天同一时刻
+    if (diff <= 0) diff += 24 * 3600;
     return diff;
   }
 
