@@ -20,6 +20,16 @@ test('parseResetSeconds handles cli and zh/en formats', () => {
   assert.equal(parseResetSeconds(''), 0);
 });
 
+test('parseResetSeconds handles absolute times', () => {
+  const now = new Date(2026, 7, 18, 10, 0, 0).getTime(); // 2026-08-18 10:00
+  // 当天 3:00 PM = 15:00 → 5 小时后
+  assert.equal(parseResetSeconds('resets at 3:00 PM', now), 5 * 3600);
+  // 已过时刻(09:00)→ 明天 09:00
+  assert.equal(parseResetSeconds('resets at 9:00 AM', now), 23 * 3600);
+  // 完整日期时间
+  assert.equal(parseResetSeconds('resets on 2026-08-20 12:00', now), 2 * 86400 + 2 * 3600);
+});
+
 test('parseScrapedUsage maps 5-hour and weekly meters into quota windows', () => {
   const items = [
     '5-hour ███░░░░░░░ 32% · resets in 3h 12m',

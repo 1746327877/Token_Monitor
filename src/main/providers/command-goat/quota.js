@@ -17,11 +17,18 @@ function parsePercent(text) {
   return m ? clamp(parseFloat(m[1]), 0, 100) : null;
 }
 
-// 解析重置时间文本(zh/en):"3h 12m" / "2d 4h" / "3 小时 12 分钟" / "2 天 4 小时" → 秒。
-function parseResetSeconds(text) {
+// 解析重置时间文本 → 距现在的秒数。
+// 支持:
+//   相对时长: "3h 12m" / "2d 4h" / "3 小时 12 分钟" / "2 天 4 小时" / "few seconds"/"几秒"
+//   绝对时刻: "resets at 3:00 PM" / "at 18:00" / "2026-08-18 18:00" / "今天 18:00"(距 now 换算秒数)
+function parseResetSeconds(text, now) {
   const s = String(text || '');
+  const nowMs = now || Date.now();
   if (/few second|几秒/i.test(s)) return 0;
+
+  // 相对时长(优先,避免 "2h" 被绝对时间误读)
   let total = 0;
+  let matchedDuration = false;
   const re = /(\d+)\s*(天|小时|分钟|day|hour|minute|[dhms])/gi;
   let m;
   while ((m = re.exec(s))) {
@@ -31,8 +38,37 @@ function parseResetSeconds(text) {
     else if (unit.indexOf('小') !== -1 || unit === 'h' || unit.indexOf('hour') === 0) total += n * 3600;
     else if (unit.indexOf('分') !== -1 || unit === 'm' || unit.indexOf('min') === 0) total += n * 60;
     else if (unit === 's') total += n;
+    matchedDuration = true;
   }
-  return total;
+  if (matchedDuration && total > 0) return total;
+
+  // 完整日期时间: 2026-08-18 18:00 / 2026-08-18T18:00
+  const dt = /(\d{4})-(\d{1,2})-(\d{1,2})[T\s]+(\d{1,2}):(\d{2})/.exec(s);
+  if (dt) {
+    const target = new Date(
+      parseInt(dt[1], 10), parseInt(dt[2], 10) - 1, parseInt(dt[3], 10),
+      parseInt(dt[4], 10), parseInt(dt[5], 10), 0
+    ).getTime();
+    return Math.max(0, Math.round((target - nowMs) / 1000));
+  }
+
+  // 当天时刻: "3:00 PM" / "15:00" / "at 18:00" / "18:00"
+  const hm = /(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?/.exec(s);
+  if (hm) {
+    let hour = parseInt(hm[1], 10);
+    const minute = parseInt(hm[2], 10);
+    const ap = (hm[3] || '').toUpperCase();
+    if (ap === 'PM' && hour < 12) hour += 12;
+    if (ap === 'AM' && hour === 12) hour = 0;
+    if (hour > 23) return 0;
+    const target = new Date(nowMs);
+    target.setHours(hour, minute, 0, 0);
+    let diff = Math.round((target.getTime() - nowMs) / 1000);
+    if (diff <= 0) diff += 24 * 3600; // 已过 → 明天同一时刻
+    return diff;
+  }
+
+  return 0;
 }
 
 // 把抓取到的文本块归一化为 QuotaState。
@@ -82,7 +118,7 @@ function parseScrapedUsage(items, now) {
           used: used,
           limit: limit,
           remaining: Math.max(0, limit - used),
-          resetsAt: def.kind === 'monthly' ? null : nowMs + parseResetSeconds(text) * 1000
+          resetsAt: parseResetSeconds(text, nowMs) > 0 ? nowMs + parseResetSeconds(text, nowMs) * 1000 : null
         };
       }
     }
@@ -91,7 +127,7 @@ function parseScrapedUsage(items, now) {
     if (!candidate) {
       const pct = parsePercent(text);
       if (pct === null) return;
-      const resetSec = parseResetSeconds(text);
+      const resetSec = parseResetSeconds(text, nowMs);
       const limit = def.limit !== undefined ? def.limit : LIMITS.monthly;
       const used = Math.round(limit * pct) / 100;
       candidate = {
@@ -100,7 +136,7 @@ function parseScrapedUsage(items, now) {
         used: used,
         limit: limit,
         remaining: Math.max(0, limit - used),
-        resetsAt: def.kind === 'monthly' ? null : nowMs + resetSec * 1000
+        resetsAt: resetSec > 0 ? nowMs + resetSec * 1000 : null
       };
     }
 

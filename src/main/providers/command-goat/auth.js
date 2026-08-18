@@ -60,6 +60,23 @@ function saveStats(store, items) {
     models: []
   };
   store.set('usageDaily', usageDaily);
+  writeDebugDump(store, items);
+}
+
+// 把抓取到的原始文本写入调试文件,便于排查页面格式问题(打包版也能拿到)。
+function writeDebugDump(store, items) {
+  try {
+    const { app } = require('electron');
+    const fs = require('fs');
+    const path = require('path');
+    const dir = app.getPath('userData');
+    const file = path.join(dir, 'command-goat-debug.json');
+    const payload = {
+      at: new Date().toISOString(),
+      items: items
+    };
+    fs.writeFileSync(file, JSON.stringify(payload, null, 2), 'utf8');
+  } catch (e) {}
 }
 
 // 读取最近一次抓取的使用统计(卡片展示)。
@@ -69,15 +86,15 @@ function getStats(ctx) {
   return stats || { tokens: 0, runs: 0, cost: 0 };
 }
 
-// 抓取用量仪表的内嵌脚本:按行扫描窗口标签(monthly/5-hour/Weekly),把标签后几行拼成完整文本块;
-// 再兜底扫含百分比+重置的叶子节点。附带页面标题/URL/正文片段用于诊断。
+// 抓取用量仪表的内嵌脚本:按行扫描窗口标签(monthly/5-hour/Weekly),把标签后直到下一个窗口标签的
+// 行拼成完整文本块(重置时间可能是独立行);再兜底扫含百分比+重置的叶子节点。
 function scrapeUsageScript() {
   return '(() => {' +
     'var items = [];' +
     'var seen = {};' +
     'function add(text) {' +
     '  text = (text || "").trim();' +
-    '  if (!text || seen[text] || text.length > 500) return;' +
+    '  if (!text || seen[text] || text.length > 800) return;' +
     '  seen[text] = true;' +
     '  items.push(text);' +
     '}' +
@@ -86,12 +103,14 @@ function scrapeUsageScript() {
     'var isWeekly = /weekly|本\\s*周/i;' +
     'var isTokens = /total\\s*tokens|tokens/i;' +
     'var isRuns = /total\\s*runs|runs/i;' +
+    'var isWindowLabel = function (l) { return isMonthly.test(l) || is5h.test(l) || isWeekly.test(l); };' +
     'var bodyText = document.body ? document.body.innerText : "";' +
     'var lines = bodyText.split("\\n").map(function (l) { return l.trim(); }).filter(Boolean);' +
     'for (var i = 0; i < lines.length; i++) {' +
-    '  if (!isMonthly.test(lines[i]) && !is5h.test(lines[i]) && !isWeekly.test(lines[i]) && !isTokens.test(lines[i]) && !isRuns.test(lines[i])) continue;' +
+    '  if (!isWindowLabel(lines[i]) && !isTokens.test(lines[i]) && !isRuns.test(lines[i])) continue;' +
     '  var block = lines[i];' +
-    '  for (var j = i + 1; j < Math.min(lines.length, i + 5); j++) {' +
+    '  for (var j = i + 1; j < Math.min(lines.length, i + 15); j++) {' +
+    '    if (j !== i + 1 && isWindowLabel(lines[j])) break;' + // 拼到下一个窗口标签为止
     '    block += " " + lines[j];' +
     '  }' +
     '  add(block);' +
