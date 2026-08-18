@@ -100,7 +100,7 @@ module.exports = function setupIPC(deps) {
 
   /* ======== OpenCode Go / Command Goat 额度登录(console/studio 捕获) ======== */
 
-  function sessionWindow(title) {
+  function sessionWindow(title, partition) {
     return new BrowserWindow({
       width: 1000,
       height: 720,
@@ -108,9 +108,10 @@ module.exports = function setupIPC(deps) {
       center: true,
       title: title,
       webPreferences: {
-        partition: 'persist:opencode-console',
+        partition: partition || 'persist:opencode-console',
         contextIsolation: true,
-        nodeIntegration: false
+        nodeIntegration: false,
+        backgroundThrottling: false
       }
     });
   }
@@ -122,7 +123,7 @@ module.exports = function setupIPC(deps) {
       await opencodeGoAuth.captureSession({
         store: deps.store,
         logger: console,
-        createSessionWindow: () => sessionWindow('登录 OpenCode Go(console)')
+        createSessionWindow: () => sessionWindow('登录 OpenCode Go(console)', opencodeGoAuth.PARTITION)
       });
       if (deps.scheduler) deps.scheduler.poll('opencode-go', 'quota');
     } catch (e) {
@@ -137,7 +138,7 @@ module.exports = function setupIPC(deps) {
       await commandGoatAuth.captureSession({
         store: deps.store,
         logger: console,
-        createSessionWindow: () => sessionWindow('登录 Command Code Studio')
+        createSessionWindow: () => sessionWindow('登录 Command Code Studio', commandGoatAuth.PARTITION)
       });
       if (deps.scheduler) deps.scheduler.poll('command-goat', 'quota');
     } catch (e) {
