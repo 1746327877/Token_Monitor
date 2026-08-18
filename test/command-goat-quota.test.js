@@ -38,6 +38,26 @@ test('parseResetSeconds ignores dates not tied to a reset keyword', () => {
   assert.equal(parseResetSeconds('Weekly usage resets on 2026-08-20 12:00 billing 2026-10-19', now), 2 * 86400 + 2 * 3600);
 });
 
+test('parseResetSeconds only takes the first duration cluster (ignores filter labels)', () => {
+  const now = new Date(2026, 7, 18, 10, 0, 0).getTime();
+  // 页面真实文本:后面的 "Last 30 days" 等筛选按钮不得累加
+  const weekly = 'WEEKLY LIMIT 23% $8.10 of $35 · resets in 5d 19h // Usage Over Time Last 5 min Last hour Last 6 hours Last 12 hours Last 24 hours Last 3 days Last 7 days Last 14 days Last 30 days';
+  assert.equal(parseResetSeconds(weekly, now), 5 * 86400 + 19 * 3600);
+  const fiveHour = '5-HOUR LIMIT 13% $1.84 of $14 · resets in 2h 22m';
+  assert.equal(parseResetSeconds(fiveHour, now), 2 * 3600 + 22 * 60);
+});
+
+test('parseResetSeconds handles month-name reset dates (Sep 17)', () => {
+  const now = new Date(2026, 7, 18, 10, 0, 0).getTime(); // 2026-08-18
+  // 页面真实文本:月度 "resets Sep 17" → 2026-09-17(30 天后)
+  const monthly = 'used this month $8.10 of $70 used this month · resets Sep 17 12% Free on Laguna S 2.1';
+  const secs = parseResetSeconds(monthly, now);
+  assert.equal(secs, Math.round((new Date(2026, 8, 17).getTime() - now) / 1000));
+  // 中文月日
+  const zh = '重置于 9月17日';
+  assert.equal(parseResetSeconds(zh, now), Math.round((new Date(2026, 8, 17).getTime() - now) / 1000));
+});
+
 test('parseScrapedUsage maps 5-hour and weekly meters into quota windows', () => {
   const items = [
     '5-hour ███░░░░░░░ 32% · resets in 3h 12m',

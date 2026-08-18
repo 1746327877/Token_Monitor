@@ -110,7 +110,7 @@ function scrapeUsageScript() {
     '  if (!isWindowLabel(lines[i]) && !isTokens.test(lines[i]) && !isRuns.test(lines[i])) continue;' +
     '  var block = lines[i];' +
     '  for (var j = i + 1; j < Math.min(lines.length, i + 15); j++) {' +
-    '    if (j !== i + 1 && isWindowLabel(lines[j])) break;' + // 拼到下一个窗口标签为止
+    '    if (isWindowLabel(lines[j])) break;' + // 遇到下一个窗口标签即停,避免块内混入其他窗口
     '    block += " " + lines[j];' +
     '  }' +
     '  add(block);' +

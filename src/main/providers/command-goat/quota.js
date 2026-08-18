@@ -18,15 +18,17 @@ function parsePercent(text) {
 }
 
 // 解析重置时间文本 → 距现在的秒数。
-// 只认"重置关键词(reset/重置/renew/到期/下次)"之后的时间,避免误抓块内其他日期(如账单周期)。
+// 只认"重置关键词(reset/重置/renew/到期/下次)"之后的时间,且只取第一段时长,
+// 避免块内其他无关时长(如 "Last 30 days" 筛选按钮)被累加。
 // 支持:
-//   相对时长: "resets in 3h 12m" / "resets in 2d 4h" / "重置时间: 3 小时 12 分钟"
-//   绝对时刻: "resets at 3:00 PM" / "resets on 2026-08-20 12:00" / "重置于 18:00"
+//   相对时长: "resets in 5d 19h" / "resets in 3h 12m" / "重置时间: 3 小时 12 分钟"
+//   月名日期: "resets Sep 17" / "重置于 9月17日" → 下一次该日期
+//   完整日期: "resets on 2026-08-20 12:00"
+//   当天时刻: "resets at 3:00 PM" / "重置于 18:00"(已过 → 明天同一时刻)
 function parseResetSeconds(text, now) {
   const s = String(text || '');
   const nowMs = now || Date.now();
 
-  // 找到重置关键词,取其后的文本
   const kw = /(resets?|reset|renew|renewal|重置|到期|下次)/i.exec(s);
   if (!kw) return 0;
   const tail = s.slice((kw.index || 0) + kw[0].length);
@@ -34,21 +36,39 @@ function parseResetSeconds(text, now) {
 
   if (/few second|几秒/i.test(clean)) return 0;
 
-  // 相对时长(优先,避免 "2h" 被绝对时间误读)
-  let total = 0;
-  let matchedDuration = false;
-  const re = /(\d+)\s*(天|小时|分钟|day|hour|minute|[dhms])/gi;
-  let m;
-  while ((m = re.exec(clean))) {
-    const n = parseInt(m[1], 10);
-    const unit = m[2].toLowerCase();
-    if (unit.indexOf('天') !== -1 || unit === 'd' || unit.indexOf('day') === 0) total += n * 86400;
-    else if (unit.indexOf('小') !== -1 || unit === 'h' || unit.indexOf('hour') === 0) total += n * 3600;
-    else if (unit.indexOf('分') !== -1 || unit === 'm' || unit.indexOf('min') === 0) total += n * 60;
-    else if (unit === 's') total += n;
-    matchedDuration = true;
+  // 相对时长:只取第一段连续时长(到第一个非时长字符为止),不扫描整块
+  const firstToken = /\d+\s*(?:天|小时|分钟|day|hour|minute|[dhms])/i.exec(clean);
+  if (firstToken) {
+    const cluster = clean.slice(firstToken.index).match(/^(?:\d+\s*(?:天|小时|分钟|day|hour|minute|[dhms])\s*)+/i);
+    if (cluster) {
+      let total = 0;
+      const re = /(\d+)\s*(天|小时|分钟|day|hour|minute|[dhms])/gi;
+      let m;
+      while ((m = re.exec(cluster[0]))) {
+        const n = parseInt(m[1], 10);
+        const unit = m[2].toLowerCase();
+        if (unit.indexOf('天') !== -1 || unit === 'd' || unit.indexOf('day') === 0) total += n * 86400;
+        else if (unit.indexOf('小') !== -1 || unit === 'h' || unit.indexOf('hour') === 0) total += n * 3600;
+        else if (unit.indexOf('分') !== -1 || unit === 'm' || unit.indexOf('min') === 0) total += n * 60;
+        else if (unit === 's') total += n;
+      }
+      if (total > 0) return total;
+    }
   }
-  if (matchedDuration && total > 0) return total;
+
+  // 月名 + 日:"Sep 17" / "9月17日" / "September 17" → 下一次该日期(过了则次年)
+  const monthNames = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11, 一月: 0, 二月: 1, 三月: 2, 四月: 3, 五月: 4, 六月: 5, 七月: 6, 八月: 7, 九月: 8, 十月: 9, 十一月: 10, 十二月: 11 };
+  const md = /(\d{1,2})月(\d{1,2})日|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|一月|二月|三月|四月|五月|六月|七月|八月|九月|十月|十一月|十二月)[a-z]*\.?\s+(\d{1,2})/i.exec(clean);
+  if (md) {
+    const monName = (md[3] || '').toLowerCase();
+    const month = md[1] !== undefined ? parseInt(md[1], 10) - 1 : (monthNames[monName] !== undefined ? monthNames[monName] : -1);
+    const day = md[1] !== undefined ? parseInt(md[2], 10) : parseInt(md[4], 10);
+    if (month >= 0 && day >= 1 && day <= 31) {
+      let target = new Date(new Date(nowMs).getFullYear(), month, day, 0, 0, 0, 0).getTime();
+      if (target <= nowMs) target = new Date(new Date(nowMs).getFullYear() + 1, month, day, 0, 0, 0, 0).getTime();
+      return Math.max(0, Math.round((target - nowMs) / 1000));
+    }
+  }
 
   // 完整日期时间: 2026-08-20 12:00 / 2026-08-20T12:00
   const dt = /(\d{4})-(\d{1,2})-(\d{1,2})[T\s]+(\d{1,2}):(\d{2})/.exec(clean);
