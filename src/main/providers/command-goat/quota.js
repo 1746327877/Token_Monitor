@@ -50,39 +50,44 @@ function parseScrapedUsage(items, now) {
       ? item
       : String((item.label || '') + ' ' + (item.text || '') + ' ' + (item.value || ''));
 
-    // 月度额度池: "$X of $Y used" + month/月 关键词
-    const monthly = /\$\s*([\d.]+)\s*of\s*\$\s*([\d.]+)/i.exec(text);
-    if (monthly && /month|月/i.test(text)) {
-      const used = Math.max(0, parseFloat(monthly[1]) || 0);
-      const limit = Math.max(0, parseFloat(monthly[2]) || 0);
+    // 窗口类型(必须匹配到标签)
+    let def = null;
+    if (/monthly|month|月/i.test(text)) def = { kind: 'monthly', name: '本月额度' };
+    else if (/5-?hour|5\s*小\s*时/i.test(text)) def = { kind: '5h', name: '5 小时窗口', limit: LIMITS.rolling };
+    else if (/weekly|本\s*周/i.test(text)) def = { kind: 'weekly', name: '本周额度', limit: LIMITS.weekly };
+    if (!def) return;
+
+    // 方式 A: "$X of $Y"(直接金额,5h/每周/月度池通用)
+    const dollar = /\$\s*([\d.]+)\s*of\s*\$\s*([\d.]+)/i.exec(text);
+    if (dollar) {
+      const used = Math.max(0, parseFloat(dollar[1]) || 0);
+      const limit = Math.max(0, parseFloat(dollar[2]) || 0);
       if (limit > 0) {
         windows.push({
-          kind: 'monthly',
-          name: '本月额度',
+          kind: def.kind,
+          name: def.name,
           used: used,
           limit: limit,
           remaining: Math.max(0, limit - used),
-          resetsAt: null
+          resetsAt: def.kind === 'monthly' ? null : nowMs + parseResetSeconds(text) * 1000
         });
         return;
       }
     }
 
+    // 方式 B: 百分比 "32%" + 重置时间(5h/每周),月度池用固定上限
     const pct = parsePercent(text);
     if (pct === null) return;
     const resetSec = parseResetSeconds(text);
-    let def = null;
-    if (/5-?hour|5\s*小\s*时/i.test(text)) def = { kind: '5h', name: '5 小时窗口', limit: LIMITS.rolling };
-    else if (/weekly|本\s*周/i.test(text)) def = { kind: 'weekly', name: '本周额度', limit: LIMITS.weekly };
-    if (!def) return;
-    const used = Math.round(def.limit * pct) / 100;
+    const limit = def.limit !== undefined ? def.limit : LIMITS.monthly;
+    const used = Math.round(limit * pct) / 100;
     windows.push({
       kind: def.kind,
       name: def.name,
       used: used,
-      limit: def.limit,
-      remaining: Math.max(0, def.limit - used),
-      resetsAt: nowMs + resetSec * 1000
+      limit: limit,
+      remaining: Math.max(0, limit - used),
+      resetsAt: def.kind === 'monthly' ? null : nowMs + resetSec * 1000
     });
   });
   if (!windows.length) return null;

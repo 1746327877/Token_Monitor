@@ -92,6 +92,25 @@ test('parseScrapedUsage mixes monthly pool with 5h/weekly windows', () => {
   assert.deepEqual(kinds, ['5h', 'monthly', 'weekly']);
 });
 
+test('parseScrapedUsage handles dollar-format 5h/weekly windows (usage page)', () => {
+  const items = [
+    '5-hour usage $4.48 of $14 · resets in 3h 12m',
+    'Weekly usage $14.35 of $35 · resets in 2d 4h'
+  ];
+  const quota = parseScrapedUsage(items);
+  assert.ok(quota);
+  assert.equal(quota.windows.length, 2);
+  const byKind = {};
+  quota.windows.forEach((w) => { byKind[w.kind] = w; });
+  assert.equal(byKind['5h'].used, 4.48);
+  assert.equal(byKind['5h'].limit, 14);
+  assert.equal(byKind['5h'].remaining, 14 - 4.48);
+  assert.ok(Math.abs(byKind['5h'].resetsAt - (Date.now() + (3 * 3600 + 12 * 60) * 1000)) < 1000);
+  assert.equal(byKind.weekly.used, 14.35);
+  assert.equal(byKind.weekly.limit, 35);
+  assert.ok(Math.abs(byKind.weekly.resetsAt - (Date.now() + (2 * 86400 + 4 * 3600) * 1000)) < 1000);
+});
+
 test('parseScrapedStats extracts tokens/runs/cost from the Studio overview', () => {
   const items = [
     'MONTHLY USAGE $0.12 of $70 used this month',

@@ -5,6 +5,7 @@ const { parseScrapedUsage, parseScrapedStats, CRED_KEY } = require('./quota');
 const { localDayStr } = require('../../core/locallog');
 
 const STUDIO_URL = 'https://commandcode.ai/studio/';
+const USAGE_URL = 'https://commandcode.ai/usage';
 const PARTITION = 'persist:commandcode-studio';
 const CACHE_MS = 3 * 60 * 1000;
 const STATS_KEY = 'providers.command-goat.stats';
@@ -164,16 +165,27 @@ function captureSession(ctx) {
     };
 
     async function pollScrape() {
+      // 1) usage 页:5小时/每周/每月窗口
       const result = await waitForUsage(win, 60000);
       if (settled) return;
       const quota = result ? parseScrapedUsage(result.items) : null;
       if (!quota) {
         logger.log('[command-goat] no usage meters found; page:', JSON.stringify(result));
-        fail(new Error('未在 Studio 页面找到用量仪表(请确认已登录 GOAT 套餐)'));
+        fail(new Error('未在用量页面找到额度数据(请确认已登录 GOAT 套餐)'));
         return;
       }
       logger.log('[command-goat] captured usage from DOM, windows:', quota.windows.map((w) => w.kind).join(','));
       saveStats(ctx && ctx.store, result.items);
+      // 2) studio 概览页:月度 tokens/runs 统计
+      try {
+        await win.loadURL(STUDIO_URL);
+        const statsResult = await waitForUsage(win, 25000);
+        if (statsResult && statsResult.items && statsResult.items.length) {
+          saveStats(ctx && ctx.store, statsResult.items);
+        }
+      } catch (e) {
+        logger.log('[command-goat] stats page scrape failed:', e && e.message ? e.message : e);
+      }
       finish(quota);
     }
 
@@ -201,12 +213,12 @@ function captureSession(ctx) {
       if (!settled) fail(new Error('未捕获到 Command Goat 用量数据(请登录后打开 Studio)'));
     });
 
-    logger.log('[command-goat] capture session start ->', STUDIO_URL);
-    win.loadURL(STUDIO_URL);
+    logger.log('[command-goat] capture session start ->', USAGE_URL);
+    win.loadURL(USAGE_URL);
   });
 }
 
-// 轮询:5 分钟缓存 + 隐藏窗口加载 Studio 用量页并抓 DOM。
+// 轮询:3 分钟缓存 + 隐藏窗口抓取(usage 页取窗口,studio 页取统计)。
 // 抓取失败时回退到最近一次成功缓存,绝不让卡片清空。
 async function fetchQuota(ctx) {
   const store = ctx && ctx.store;
@@ -217,21 +229,32 @@ async function fetchQuota(ctx) {
   if (cachedQuota && now - cachedAt < CACHE_MS) return cachedQuota;
   const win = new BrowserWindow(windowOptions({ show: false }));
   try {
-    await win.loadURL(STUDIO_URL);
+    // 1) usage 页:5小时/每周/每月窗口
+    await win.loadURL(USAGE_URL);
     const result = await waitForUsage(win, 25000);
     if (!result || !result.items || !result.items.length) {
       logger.log('[command-goat] poll scrape empty; keeping cached quota');
       return cachedQuota;
     }
     const quota = parseScrapedUsage(result.items);
-    if (quota) {
-      cachedQuota = quota;
-      cachedAt = Date.now();
-      saveStats(store, result.items);
-      return quota;
+    if (!quota) {
+      logger.log('[command-goat] poll scrape unparsable; keeping cached quota');
+      return cachedQuota;
     }
-    logger.log('[command-goat] poll scrape unparsable; keeping cached quota');
-    return cachedQuota;
+    cachedQuota = quota;
+    cachedAt = Date.now();
+    saveStats(store, result.items);
+    // 2) studio 概览页:月度 tokens/runs 统计
+    try {
+      await win.loadURL(STUDIO_URL);
+      const statsResult = await waitForUsage(win, 20000);
+      if (statsResult && statsResult.items && statsResult.items.length) {
+        saveStats(store, statsResult.items);
+      }
+    } catch (e) {
+      logger.log('[command-goat] stats page poll failed:', e && e.message ? e.message : e);
+    }
+    return quota;
   } catch (e) {
     logger.log('[command-goat] poll error:', e && e.message ? e.message : e, '; keeping cached quota');
     return cachedQuota;
@@ -240,4 +263,4 @@ async function fetchQuota(ctx) {
   }
 }
 
-module.exports = { captureSession, createSessionWindow, fetchQuota, readCred, writeCred, getStats, saveStats, scrapeUsageScript, STUDIO_URL, PARTITION, STATS_KEY };
+module.exports = { captureSession, createSessionWindow, fetchQuota, readCred, writeCred, getStats, saveStats, scrapeUsageScript, STUDIO_URL, USAGE_URL, PARTITION, STATS_KEY };
