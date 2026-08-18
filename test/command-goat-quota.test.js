@@ -79,17 +79,28 @@ test('parseScrapedUsage captures the monthly credit pool from the Studio overvie
   assert.equal(monthly.resetsAt, null);
 });
 
-test('parseScrapedUsage mixes monthly pool with 5h/weekly windows', () => {
+test('parseScrapedUsage dedupes duplicate windows (same kind matched multiple times)', () => {
+  // 页面里同一窗口可能被多处匹配:monthly 出现在概览 + 使用页,5h 也可能出现两次
   const items = [
     'MONTHLY USAGE $10 of $70 used this month',
-    '5-hour ███ 32% · resets in 3h 12m',
-    'Weekly ████ 41% · resets in 2d 4h'
+    'Monthly $9.50 of $70',
+    '5-hour usage $4 of $14 · resets in 3h',
+    '5-hour ███ 30%',
+    'Weekly $14 of $35 · resets in 2d',
+    'Weekly usage'
   ];
   const quota = parseScrapedUsage(items);
   assert.ok(quota);
+  // 每种窗口只保留一条
   assert.equal(quota.windows.length, 3);
-  const kinds = quota.windows.map((w) => w.kind).sort();
-  assert.deepEqual(kinds, ['5h', 'monthly', 'weekly']);
+  const kinds = quota.windows.map((w) => w.kind);
+  assert.deepEqual(kinds, ['5h', 'weekly', 'monthly']); // 固定顺序
+  const byKind = {};
+  quota.windows.forEach((w) => { byKind[w.kind] = w; });
+  // 保留信息更全的一条(有金额/有重置时间的)
+  assert.equal(byKind['5h'].used, 4);
+  assert.equal(byKind['5h'].limit, 14);
+  assert.equal(byKind.monthly.used, 10);
 });
 
 test('parseScrapedUsage handles dollar-format 5h/weekly windows (usage page)', () => {

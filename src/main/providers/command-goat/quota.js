@@ -4,8 +4,8 @@ const { makeQuotaState } = require('../types');
 
 const CRED_KEY = 'providers.command-goat.session';
 
-// GOAT 套餐上限(usage-limits 文档):5 小时 $14 / 每周 $35。
-const LIMITS = { rolling: 14, weekly: 35 };
+// GOAT 套餐上限(usage-limits 文档):5 小时 $14 / 每周 $35 / 每月 $70。
+const LIMITS = { rolling: 14, weekly: 35, monthly: 70 };
 
 function clamp(n, lo, hi) {
   return Math.min(hi, Math.max(lo, n));
@@ -41,10 +41,21 @@ function parseResetSeconds(text) {
 //   2) 5 小时窗口: "5-hour ███ 32% · resets in 3h 12m" → 5h 窗口
 //   3) 每周窗口:   "Weekly ████ 41% · resets in 2d 4h"   → weekly 窗口
 // items 支持字符串数组或 {label,text,value} 对象数组。
+// 页面里同一窗口可能被多次匹配(标签词出现多处),按 kind 去重:每种窗口只保留信息最全的一条,
+// 并固定输出顺序 5小时 → 每周 → 每月。
 function parseScrapedUsage(items, now) {
   if (!Array.isArray(items) || !items.length) return null;
   const nowMs = now || Date.now();
-  const windows = [];
+  const byKind = Object.create(null);
+
+  function windowScore(w) {
+    let s = 0;
+    if (w.used > 0) s += 1;
+    if (w.resetsAt) s += 1;
+    if (w.limit > 0) s += 1;
+    return s;
+  }
+
   (items || []).forEach((item) => {
     const text = typeof item === 'string'
       ? item
@@ -52,10 +63,12 @@ function parseScrapedUsage(items, now) {
 
     // 窗口类型(必须匹配到标签)
     let def = null;
-    if (/monthly|month|月/i.test(text)) def = { kind: 'monthly', name: '本月额度' };
-    else if (/5-?hour|5\s*小\s*时/i.test(text)) def = { kind: '5h', name: '5 小时窗口', limit: LIMITS.rolling };
+    if (/5-?hour|5\s*小\s*时/i.test(text)) def = { kind: '5h', name: '5 小时窗口', limit: LIMITS.rolling };
     else if (/weekly|本\s*周/i.test(text)) def = { kind: 'weekly', name: '本周额度', limit: LIMITS.weekly };
+    else if (/monthly|month|月/i.test(text)) def = { kind: 'monthly', name: '本月额度', limit: LIMITS.monthly };
     if (!def) return;
+
+    let candidate = null;
 
     // 方式 A: "$X of $Y"(直接金额,5h/每周/月度池通用)
     const dollar = /\$\s*([\d.]+)\s*of\s*\$\s*([\d.]+)/i.exec(text);
@@ -63,33 +76,44 @@ function parseScrapedUsage(items, now) {
       const used = Math.max(0, parseFloat(dollar[1]) || 0);
       const limit = Math.max(0, parseFloat(dollar[2]) || 0);
       if (limit > 0) {
-        windows.push({
+        candidate = {
           kind: def.kind,
           name: def.name,
           used: used,
           limit: limit,
           remaining: Math.max(0, limit - used),
           resetsAt: def.kind === 'monthly' ? null : nowMs + parseResetSeconds(text) * 1000
-        });
-        return;
+        };
       }
     }
 
     // 方式 B: 百分比 "32%" + 重置时间(5h/每周),月度池用固定上限
-    const pct = parsePercent(text);
-    if (pct === null) return;
-    const resetSec = parseResetSeconds(text);
-    const limit = def.limit !== undefined ? def.limit : LIMITS.monthly;
-    const used = Math.round(limit * pct) / 100;
-    windows.push({
-      kind: def.kind,
-      name: def.name,
-      used: used,
-      limit: limit,
-      remaining: Math.max(0, limit - used),
-      resetsAt: def.kind === 'monthly' ? null : nowMs + resetSec * 1000
-    });
+    if (!candidate) {
+      const pct = parsePercent(text);
+      if (pct === null) return;
+      const resetSec = parseResetSeconds(text);
+      const limit = def.limit !== undefined ? def.limit : LIMITS.monthly;
+      const used = Math.round(limit * pct) / 100;
+      candidate = {
+        kind: def.kind,
+        name: def.name,
+        used: used,
+        limit: limit,
+        remaining: Math.max(0, limit - used),
+        resetsAt: def.kind === 'monthly' ? null : nowMs + resetSec * 1000
+      };
+    }
+
+    if (!candidate) return;
+    const prev = byKind[candidate.kind];
+    if (!prev || windowScore(candidate) > windowScore(prev)) {
+      byKind[candidate.kind] = candidate;
+    }
   });
+
+  const windows = ['5h', 'weekly', 'monthly']
+    .filter((k) => byKind[k])
+    .map((k) => byKind[k]);
   if (!windows.length) return null;
   return makeQuotaState('command-goat', 'subscription', windows, null, 'Command Goat', null, nowMs);
 }
