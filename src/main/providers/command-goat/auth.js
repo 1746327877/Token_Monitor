@@ -6,7 +6,7 @@ const { localDayStr } = require('../../core/locallog');
 
 const STUDIO_URL = 'https://commandcode.ai/studio/';
 const PARTITION = 'persist:commandcode-studio';
-const CACHE_MS = 5 * 60 * 1000;
+const CACHE_MS = 3 * 60 * 1000;
 const STATS_KEY = 'providers.command-goat.stats';
 
 let cachedQuota = null;
@@ -22,7 +22,9 @@ function windowOptions(extra) {
     webPreferences: {
       partition: PARTITION,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      // 隐藏轮询窗口必须关掉后台节流,否则 SPA 渲染/定时器被暂停,抓不到数据
+      backgroundThrottling: false
     }
   }, extra || {});
 }
@@ -205,8 +207,10 @@ function captureSession(ctx) {
 }
 
 // 轮询:5 分钟缓存 + 隐藏窗口加载 Studio 用量页并抓 DOM。
+// 抓取失败时回退到最近一次成功缓存,绝不让卡片清空。
 async function fetchQuota(ctx) {
   const store = ctx && ctx.store;
+  const logger = (ctx && ctx.logger) || console;
   const cred = readCred(store);
   if (!cred) return null;
   const now = Date.now();
@@ -215,16 +219,22 @@ async function fetchQuota(ctx) {
   try {
     await win.loadURL(STUDIO_URL);
     const result = await waitForUsage(win, 25000);
-    if (!result || !result.items || !result.items.length) return null;
+    if (!result || !result.items || !result.items.length) {
+      logger.log('[command-goat] poll scrape empty; keeping cached quota');
+      return cachedQuota;
+    }
     const quota = parseScrapedUsage(result.items);
     if (quota) {
       cachedQuota = quota;
       cachedAt = Date.now();
       saveStats(store, result.items);
+      return quota;
     }
-    return quota;
+    logger.log('[command-goat] poll scrape unparsable; keeping cached quota');
+    return cachedQuota;
   } catch (e) {
-    return null;
+    logger.log('[command-goat] poll error:', e && e.message ? e.message : e, '; keeping cached quota');
+    return cachedQuota;
   } finally {
     try { win.destroy(); } catch (e) {}
   }

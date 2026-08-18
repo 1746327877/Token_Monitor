@@ -21,7 +21,9 @@ function windowOptions(extra) {
     webPreferences: {
       partition: PARTITION,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      // 隐藏轮询窗口必须关掉后台节流,否则 SPA 渲染被暂停,抓不到数据
+      backgroundThrottling: false
     }
   }, extra || {});
 }
@@ -160,8 +162,10 @@ function captureSession(ctx) {
 }
 
 // 轮询:5 分钟缓存 + 隐藏窗口加载 /go 页并抓 DOM(会话在持久化 partition 里,无需手动 cookie)。
+// 抓取失败时回退到最近一次成功缓存,绝不让卡片清空。
 async function fetchQuota(ctx) {
   const store = ctx && ctx.store;
+  const logger = (ctx && ctx.logger) || console;
   const cred = readCred(store);
   const workspaceID = cred && cred.workspaceID;
   if (!workspaceID) return null;
@@ -171,15 +175,21 @@ async function fetchQuota(ctx) {
   try {
     await win.loadURL('https://opencode.ai/workspace/' + workspaceID + '/go');
     const items = await waitForUsage(win, 25000);
-    if (!items.length) return null;
+    if (!items.length) {
+      logger.log('[opencode-go] poll scrape empty; keeping cached quota');
+      return cachedQuota;
+    }
     const quota = parseScrapedUsage(items);
     if (quota) {
       cachedQuota = quota;
       cachedAt = Date.now();
+      return quota;
     }
-    return quota;
+    logger.log('[opencode-go] poll scrape unparsable; keeping cached quota');
+    return cachedQuota;
   } catch (e) {
-    return null;
+    logger.log('[opencode-go] poll error:', e && e.message ? e.message : e, '; keeping cached quota');
+    return cachedQuota;
   } finally {
     try { win.destroy(); } catch (e) {}
   }
