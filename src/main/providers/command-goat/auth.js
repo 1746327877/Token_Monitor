@@ -42,21 +42,50 @@ function writeCred(store, cred) {
   if (store) store.set(CRED_KEY, cred);
 }
 
+const LAST_TOTAL_KEY = 'providers.command-goat.lastTotal';
+const LAST_COST_KEY = 'providers.command-goat.lastCost';
+const LAST_RUNS_KEY = 'providers.command-goat.lastRuns';
+
 function saveStats(store, items) {
   if (!store) return;
   const stats = parseScrapedStats(items);
   store.set(STATS_KEY, stats);
-  // 把月度 token 总量计入"今天"的每日消耗(usageDaily),让每日 Token 消耗图/热力图显示 Command Goat。
-  // Studio 只有月度总量,无每日明细,故按"本月累计"记在当天。
+
   const today = localDayStr(Date.now());
   const usageDaily = store.get('usageDaily') || {};
+
+  // 新代码首次运行:清掉旧版本把整月累计写进"当天"的假数据,重新从增量开始
+  if (store.get(LAST_TOTAL_KEY) === undefined) {
+    Object.keys(usageDaily).forEach((k) => {
+      if (k.indexOf('command-goat:') === 0) delete usageDaily[k];
+    });
+  }
+
+  // Studio 只有月度总量,无每日明细。每日消耗 = 两次抓取之间的增量(当前月度总量 - 上次月度总量),
+  // 累加到当天;月度重置(总量变小)时重新建立基线。
+  const prevTotal = Number(store.get(LAST_TOTAL_KEY)) || 0;
+  const prevCost = Number(store.get(LAST_COST_KEY)) || 0;
+  const prevRuns = Number(store.get(LAST_RUNS_KEY)) || 0;
+
+  let delta = 0;
+  if (prevTotal > 0 && stats.tokens >= prevTotal) delta = stats.tokens - prevTotal;
+  let deltaCost = 0;
+  if (prevCost > 0 && stats.cost >= prevCost) deltaCost = Math.round((stats.cost - prevCost) * 10000) / 10000;
+  let deltaRuns = 0;
+  if (prevRuns > 0 && stats.runs >= prevRuns) deltaRuns = stats.runs - prevRuns;
+
+  store.set(LAST_TOTAL_KEY, stats.tokens);
+  store.set(LAST_COST_KEY, stats.cost);
+  store.set(LAST_RUNS_KEY, stats.runs);
+
+  const prevEntry = usageDaily['command-goat:' + today] || { input: 0, cached: 0, output: 0, total: 0, cost: 0, messages: 0, models: [] };
   usageDaily['command-goat:' + today] = {
     input: 0,
     cached: 0,
-    output: stats.tokens,
-    total: stats.tokens,
-    cost: stats.cost,
-    messages: stats.runs,
+    output: prevEntry.output + delta,
+    total: prevEntry.total + delta,
+    cost: (prevEntry.cost || 0) + deltaCost,
+    messages: (prevEntry.messages || 0) + deltaRuns,
     models: []
   };
   store.set('usageDaily', usageDaily);

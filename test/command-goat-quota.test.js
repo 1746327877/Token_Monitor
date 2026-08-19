@@ -2,6 +2,17 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { parseScrapedUsage, parseScrapedStats, parsePercent, parseResetSeconds, LIMITS } = require('../src/main/providers/command-goat/quota');
+const { saveStats } = require('../src/main/providers/command-goat/auth');
+const { localDayStr } = require('../src/main/core/locallog');
+
+function makeStore() {
+  const data = {};
+  return {
+    data,
+    get(k) { return data[k]; },
+    set(k, v) { data[k] = v; }
+  };
+}
 
 test('parsePercent reads percentage text', () => {
   assert.equal(parsePercent('32%'), 32);
@@ -176,4 +187,48 @@ test('parseScrapedStats extracts tokens/runs/cost from the Studio overview', () 
   const none = parseScrapedStats([]);
   assert.equal(none.tokens, 0);
   assert.equal(none.runs, 0);
+});
+
+test('saveStats accumulates daily deltas so idle days stay at zero', () => {
+  const store = makeStore();
+  const today = localDayStr(Date.now());
+
+  const mk = (tokens, cost, runs) => [
+    'MONTHLY USAGE $' + cost + ' of $70 used this month',
+    'TOTAL TOKENS ' + tokens + ' tokens',
+    'TOTAL RUNS ' + runs + ' runs'
+  ];
+
+  // 首次抓取:当天从 0 开始,只建基线
+  saveStats(store, mk(330700000, 8.1, 844));
+  assert.equal(store.get('usageDaily')['command-goat:' + today].total, 0);
+
+  // 又用了 100 万:delta 累加到当天
+  saveStats(store, mk(331700000, 8.13, 847));
+  assert.equal(store.get('usageDaily')['command-goat:' + today].total, 1000000);
+  assert.equal(store.get('usageDaily')['command-goat:' + today].cost, 0.03);
+  assert.equal(store.get('usageDaily')['command-goat:' + today].messages, 3);
+
+  // 今天没干活:总量不变 → delta=0 → 当天仍是 100 万,不变成整月累计
+  saveStats(store, mk(331700000, 8.13, 847));
+  assert.equal(store.get('usageDaily')['command-goat:' + today].total, 1000000);
+
+  // 月度重置(总量变小):重新建基线,当天保持(不叠加负数)
+  saveStats(store, mk(500000, 0.1, 10));
+  assert.equal(store.get('usageDaily')['command-goat:' + today].total, 1000000);
+});
+
+test('saveStats clears stale fake daily entries on first run of the new code', () => {
+  const store = makeStore();
+  const today = localDayStr(Date.now());
+  // 旧版本遗留:昨天和今天都是整月累计
+  store.set('usageDaily', {
+    ['command-goat:2026-08-17']: { total: 330700000, output: 330700000 },
+    ['command-goat:' + today]: { total: 330700000, output: 330700000 }
+  });
+  saveStats(store, ['MONTHLY USAGE $8.10 of $70 used this month', 'TOTAL TOKENS 330.7M tokens', 'TOTAL RUNS 844 runs']);
+  const ud = store.get('usageDaily');
+  // 旧的假数据被清掉,只保留今天的增量条目(首次=0)
+  assert.equal(ud['command-goat:2026-08-17'], undefined);
+  assert.equal(ud['command-goat:' + today].total, 0);
 });
