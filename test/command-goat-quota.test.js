@@ -218,17 +218,28 @@ test('saveStats accumulates daily deltas so idle days stay at zero', () => {
   assert.equal(store.get('usageDaily')['command-goat:' + today].total, 1000000);
 });
 
-test('saveStats clears stale fake daily entries on first run of the new code', () => {
+test('saveStats restores pre-fix history into the previous day once', () => {
   const store = makeStore();
   const today = localDayStr(Date.now());
-  // 旧版本遗留:昨天和今天都是整月累计
+  const prevDay = localDayStr(Date.now() - 86400000);
+
+  // 模拟:今天已有真实增量(200 万),月度总量 349.6M → 历史部分 ≈ 347.6M 应记到昨天
   store.set('usageDaily', {
-    ['command-goat:2026-08-17']: { total: 330700000, output: 330700000 },
-    ['command-goat:' + today]: { total: 330700000, output: 330700000 }
+    ['command-goat:' + today]: { total: 2000000, output: 2000000 }
   });
-  saveStats(store, ['MONTHLY USAGE $8.10 of $70 used this month', 'TOTAL TOKENS 330.7M tokens', 'TOTAL RUNS 844 runs']);
+  store.set('providers.command-goat.lastTotal', 349600000);
+  store.set('providers.command-goat.lastCost', 8.94);
+  store.set('providers.command-goat.lastRuns', 936);
+
+  saveStats(store, ['MONTHLY USAGE $8.94 of $70 used this month', 'TOTAL TOKENS 349.6M tokens', 'TOTAL RUNS 936 runs']);
+
   const ud = store.get('usageDaily');
-  // 旧的假数据被清掉,只保留今天的增量条目(首次=0)
-  assert.equal(ud['command-goat:2026-08-17'], undefined);
-  assert.equal(ud['command-goat:' + today].total, 0);
+  // 历史(月度累计 - 今天增量)记到昨天,一次性
+  assert.equal(ud['command-goat:' + prevDay].total, 349600000 - 2000000);
+  // 今天继续按增量累加(本次没增量 → 保持 200 万)
+  assert.equal(ud['command-goat:' + today].total, 2000000);
+
+  // 第二次保存不再重复写昨天
+  saveStats(store, ['MONTHLY USAGE $8.94 of $70 used this month', 'TOTAL TOKENS 349.6M tokens', 'TOTAL RUNS 936 runs']);
+  assert.equal(store.get('usageDaily')['command-goat:' + prevDay].total, 349600000 - 2000000);
 });

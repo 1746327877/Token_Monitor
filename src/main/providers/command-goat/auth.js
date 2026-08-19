@@ -45,6 +45,7 @@ function writeCred(store, cred) {
 const LAST_TOTAL_KEY = 'providers.command-goat.lastTotal';
 const LAST_COST_KEY = 'providers.command-goat.lastCost';
 const LAST_RUNS_KEY = 'providers.command-goat.lastRuns';
+const HISTORY_RESTORED_KEY = 'providers.command-goat.historyRestored';
 
 function saveStats(store, items) {
   if (!store) return;
@@ -54,11 +55,26 @@ function saveStats(store, items) {
   const today = localDayStr(Date.now());
   const usageDaily = store.get('usageDaily') || {};
 
-  // 新代码首次运行:清掉旧版本把整月累计写进"当天"的假数据,重新从增量开始
-  if (store.get(LAST_TOTAL_KEY) === undefined) {
-    Object.keys(usageDaily).forEach((k) => {
-      if (k.indexOf('command-goat:') === 0) delete usageDaily[k];
-    });
+  // 一次性恢复历史:修复前的月度累计曾经被清掉,这里把它重新记到"昨天"。
+  // 历史部分 = 当前月度总量 - 今天已累计的增量;只执行一次,不影响后续。
+  if (!store.get(HISTORY_RESTORED_KEY)) {
+    const prevDay = localDayStr(Date.now() - 86400000);
+    if (!usageDaily['command-goat:' + prevDay]) {
+      const todayEntry = usageDaily['command-goat:' + today] || { total: 0 };
+      const historical = Math.max(0, Math.round(stats.tokens - (Number(todayEntry.total) || 0)));
+      if (historical > 0) {
+        usageDaily['command-goat:' + prevDay] = {
+          input: 0,
+          cached: 0,
+          output: historical,
+          total: historical,
+          cost: 0,
+          messages: 0,
+          models: []
+        };
+      }
+    }
+    store.set(HISTORY_RESTORED_KEY, true);
   }
 
   // Studio 只有月度总量,无每日明细。每日消耗 = 两次抓取之间的增量(当前月度总量 - 上次月度总量),
