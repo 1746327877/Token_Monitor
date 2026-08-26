@@ -199,15 +199,13 @@
     updateSessionSection();
   }).catch(function () {});
 
-  // 主题与主窗口保持一致:React 主窗口目前只有浅色一套样式(无 body.dark 处理),
-  // 设置窗口若跟随系统变暗会与主窗口割裂。在主窗口支持暗色前,设置窗口固定浅色,
-  // 忽略系统暗色与 theme:changed。
+  // 终末地主题恒为暗色:设置窗口与主窗口保持一致
   function applyInitialTheme() {
-    document.body.classList.remove('dark');
+    document.body.classList.add('dark');
   }
 
   window.api.on('theme:changed', function () {
-    document.body.classList.remove('dark');
+    document.body.classList.add('dark');
   });
 
   var resizeState = null;

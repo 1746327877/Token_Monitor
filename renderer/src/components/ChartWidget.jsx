@@ -199,7 +199,7 @@ function buildDailyOption(dom, dailyData) {
   });
   const density = barDensity(t, dom, isCardMode(dom));
   return {
-    color: ['#22C55E', '#F97316', '#74B8FC'],
+    color: ['#4ADE80', '#FFB03A', '#7CE7FF'],
     backgroundColor: 'transparent',
     textStyle: { color: t.textColor, fontSize: 10 },
     grid: density.grid,
@@ -288,18 +288,18 @@ const CURVE_CONFIGS = {
     series: (isDark, totalData, deltaData) => [
       {
         name: '累计 Token', type: 'line', smooth: true, showSymbol: false,
-        lineStyle: { color: '#74B8FC', width: 1.5 },
+        lineStyle: { color: '#7CE7FF', width: 1.5 },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(116,184,252,0.15)' },
-            { offset: 1, color: 'rgba(116,184,252,0)' }
+            { offset: 0, color: 'rgba(124,231,255,0.15)' },
+            { offset: 1, color: 'rgba(124,231,255,0)' }
           ])
         },
         data: totalData
       },
       {
         name: '增量 Token', type: 'bar', barMaxWidth: 20,
-        itemStyle: { color: 'rgba(116,184,252,0.4)' },
+        itemStyle: { color: 'rgba(124,231,255,0.4)' },
         data: deltaData
       }
     ]
@@ -311,18 +311,18 @@ const CURVE_CONFIGS = {
     series: (isDark, totalData, deltaData) => [
       {
         name: '累计费用', type: 'line', smooth: true, showSymbol: false,
-        lineStyle: { color: '#22C55E', width: 1.5 },
+        lineStyle: { color: '#4ADE80', width: 1.5 },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(34,197,94,0.15)' },
-            { offset: 1, color: 'rgba(34,197,94,0)' }
+            { offset: 0, color: 'rgba(74,222,128,0.15)' },
+            { offset: 1, color: 'rgba(74,222,128,0)' }
           ])
         },
         data: totalData
       },
       {
         name: '增量费用', type: 'bar', barMaxWidth: 20,
-        itemStyle: { color: 'rgba(34,197,94,0.35)' },
+        itemStyle: { color: 'rgba(74,222,128,0.35)' },
         data: deltaData
       }
     ]

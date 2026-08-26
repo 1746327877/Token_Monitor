@@ -1,25 +1,25 @@
 :root {
-  --primary: #74B8FC;
-  --primary-light: #95CAFF;
-  --primary-dark: #5A9FE0;
-  --bg-window: rgba(255, 255, 255, 0.92);
-  --bg-window-dark: rgba(30, 32, 38, 0.92);
-  --bg-card: #F8F9FC;
-  --bg-card-dark: #252730;
-  --text-primary: #1A1A2E;
-  --text-secondary: #6B7280;
-  --text-inverse: #FFFFFF;
-  --border: #E5E7EB;
-  --border-dark: #3A3C45;
-  --success: #22C55E;
-  --warning: #F59E0B;
-  --error: #EF4444;
-  --radius-window: 16px;
-  --radius-card: 12px;
-  --radius-btn: 8px;
-  --radius-input: 8px;
-  --shadow-window: 0 4px 24px rgba(0, 0, 0, 0.08);
-  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --primary: #7CE7FF;
+  --primary-light: #A9F1FF;
+  --primary-dark: #3FB8D8;
+  --bg-window: rgba(13, 18, 24, 0.94);
+  --bg-window-dark: rgba(7, 9, 12, 0.96);
+  --bg-card: #131A21;
+  --bg-card-dark: #0D1218;
+  --text-primary: #E2ECF2;
+  --text-secondary: #8494A3;
+  --text-inverse: #0B0E12;
+  --border: #22313D;
+  --border-dark: #1A2731;
+  --success: #4ADE80;
+  --warning: #FFB03A;
+  --error: #FF5C5C;
+  --radius-window: 10px;
+  --radius-card: 8px;
+  --radius-btn: 6px;
+  --radius-input: 6px;
+  --shadow-window: 0 0 0 1px rgba(124, 231, 255, 0.12), 0 6px 28px rgba(0, 0, 0, 0.6);
+  --shadow-card: 0 0 0 1px rgba(124, 231, 255, 0.08), 0 2px 10px rgba(0, 0, 0, 0.45);
 }
 
 html {

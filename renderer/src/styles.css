@@ -13,7 +13,7 @@ body,
   /* 透明页面背景:透出 DWM acrylic 磨砂(非分层窗口,缩放不会露黑) */
   background: transparent;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  color: #1f2329;
+  color: var(--text-primary);
   user-select: none;
 }
 
@@ -45,7 +45,7 @@ body,
   display: flex;
   flex-direction: column;
   /* 半透明白底:透出少量 acrylic 磨砂,同时保证画面明亮不偏灰 */
-  background: rgba(246, 247, 249, 0.93);
+  background: var(--bg-window);
   /* 圆角由 DWM 合成层统一裁剪, CSS 不再画圆角 */
   border-radius: 0;
   overflow: hidden;
@@ -94,11 +94,11 @@ body,
   background: transparent;
 }
 .content::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.16);
+  background: rgba(124, 231, 255, 0.18);
   border-radius: 4px;
 }
 .content::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(124, 231, 255, 0.3);
 }
 .content::-webkit-scrollbar-button {
   display: none;
@@ -116,7 +116,7 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #8a919f;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -136,7 +136,7 @@ body,
   border: none;
   background: transparent;
   border-radius: 8px;
-  color: #5b6372;
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0;
   transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease, box-shadow 0.2s ease;
@@ -147,8 +147,8 @@ body,
 }
 
 .titlebar-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: #1f2329;
+  background: rgba(124, 231, 255, 0.08);
+  color: var(--text-primary);
 }
 
 /* 按压回弹 */
@@ -194,8 +194,8 @@ body,
   justify-content: space-between;
   padding: 6px 12px;
   font-size: 11px;
-  color: #8a919f;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
 
@@ -208,38 +208,48 @@ body,
 }
 
 .status-dot.online {
-  background: #22c55e;
+  background: var(--success);
 }
 
 .status-dot.offline {
-  background: #ef4444;
+  background: var(--error);
 }
 
 /* ======== 透明窗口时代遗留:非透明窗口 + DWM 圆角后不再需要在拖动时切直角 ======== */
 
-/* ======== CSS 变量(从旧 main.css 平移) ======== */
+/* ======== 终末地(Arknights: Endfield)风格主题 ========
+   近黑底 + 荧光青主色 + 琥珀橙高亮,工业 HUD 面板感 */
 :root {
-  --primary: #74B8FC;
-  --primary-light: #95CAFF;
-  --primary-dark: #5A9FE0;
-  --bg-window: rgba(255, 255, 255, 0.92);
-  --bg-window-dark: rgba(30, 32, 38, 0.92);
-  --bg-card: #F8F9FC;
-  --bg-card-dark: #252730;
-  --text-primary: #1A1A2E;
-  --text-secondary: #6B7280;
-  --text-inverse: #FFFFFF;
-  --border: #E5E7EB;
-  --border-dark: #3A3C45;
-  --success: #22C55E;
-  --warning: #F59E0B;
-  --error: #EF4444;
-  --radius-window: 16px;
-  --radius-card: 12px;
-  --radius-btn: 8px;
-  --radius-input: 8px;
-  --shadow-window: 0 4px 24px rgba(0, 0, 0, 0.08);
-  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --primary: #7CE7FF;
+  --primary-light: #A9F1FF;
+  --primary-dark: #3FB8D8;
+  --accent: #FFB03A;
+  --bg-window: rgba(11, 14, 18, 0.94);
+  --bg-window-dark: rgba(7, 9, 12, 0.96);
+  --bg-card: #131A21;
+  --bg-card-dark: #0D1218;
+  --bg-elevated: #1A232C;
+  --text-primary: #E2ECF2;
+  --text-secondary: #8494A3;
+  --text-inverse: #0B0E12;
+  --border: #22313D;
+  --border-dark: #1A2731;
+  --border-glow: rgba(124, 231, 255, 0.35);
+  --success: #4ADE80;
+  --warning: #FFB03A;
+  --error: #FF5C5C;
+  --radius-window: 10px;
+  --radius-card: 8px;
+  --radius-btn: 6px;
+  --radius-input: 6px;
+  --shadow-window: 0 0 0 1px rgba(124, 231, 255, 0.12), 0 6px 28px rgba(0, 0, 0, 0.6);
+  --shadow-card: 0 0 0 1px rgba(124, 231, 255, 0.08), 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+/* 主窗口恒为终末地暗色;body.dark 标记供图表主题读取 */
+body.dark {
+  background: var(--bg-window);
+  color: var(--text-primary);
 }
 
 /* ======== 仪表盘组件 ======== */
@@ -259,6 +269,34 @@ body,
   padding: 8px 10px;
   overflow: hidden;
   container-type: inline-size;
+  /* 终末地 HUD 面板:顶部细发光条 + 左侧青色角标 */
+  position: relative;
+  box-shadow: var(--shadow-card);
+}
+
+.component-surface::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--primary), transparent 70%);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.component-surface::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  border-top: 1px solid var(--primary);
+  border-left: 1px solid var(--primary);
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .component-title {
@@ -271,7 +309,7 @@ body,
 
 .fee-card-surface {
   /* 渐变叠加在实色卡片底上,避免窗口半透明时透出底色、与其他卡片风格不一致 */
-  background: linear-gradient(135deg, rgba(116, 184, 252, 0.04), rgba(149, 202, 255, 0.02)), var(--bg-card);
+  background: linear-gradient(135deg, rgba(124, 231, 255, 0.05), rgba(124, 231, 255, 0.02)), var(--bg-card);
   transition: all 200ms ease-out;
   cursor: default;
 }
@@ -279,7 +317,7 @@ body,
 .fee-card-surface:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-card);
-  background: linear-gradient(135deg, rgba(116, 184, 252, 0.08), rgba(149, 202, 255, 0.04)), var(--bg-card);
+  background: linear-gradient(135deg, rgba(124, 231, 255, 0.09), rgba(124, 231, 255, 0.03)), var(--bg-card);
 }
 
 .fee-card-content {
@@ -373,8 +411,8 @@ body,
   width: 56px;
   height: 12px;
   border-radius: 999px;
-  background: rgba(116, 184, 252, 0.18);
-  border: 1px solid rgba(116, 184, 252, 0.45);
+  background: rgba(124, 231, 255, 0.16);
+  border: 1px solid rgba(124, 231, 255, 0.4);
   cursor: grab;
   /* 必须压过 gridstack 缩放手柄的 z-index:100,否则拖拽柄被 n 手柄盖住点不到 */
   z-index: 110;
@@ -497,7 +535,7 @@ body,
 
 .quota-bar {
   height: 6px;
-  background: rgba(116, 184, 252, 0.12);
+  background: rgba(124, 231, 255, 0.12);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -591,8 +629,8 @@ body,
 }
 
 .heatmap-tab.active {
-  background: rgba(116, 184, 252, 0.16);
-  color: var(--primary-dark);
+  background: rgba(124, 231, 255, 0.14);
+  color: var(--primary);
   font-weight: 600;
 }
 
@@ -681,7 +719,7 @@ body,
 .heatmap-tooltip {
   position: fixed;
   transform: translate(-50%, -100%);
-  background: rgba(30, 32, 38, 0.95);
+  background: rgba(10, 14, 18, 0.96);
   color: #fff;
   padding: 6px 10px;
   border-radius: 8px;
@@ -720,7 +758,7 @@ body,
 /* 头部右侧总消耗量 */
 .heatmap-tooltip-total {
   font-weight: 600;
-  color: #9fd0fd;
+  color: var(--primary);
   white-space: nowrap;
 }
 

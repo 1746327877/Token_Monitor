@@ -1,12 +1,14 @@
-// ECharts 主题(从 src/renderer/js/charts.js 的 getTheme 逐字迁移为 ESM)。
+// ECharts 主题(终末地风格:暗色 + 荧光青/琥珀橙)。
+// 主窗口恒为暗色(body.dark),isDark 参数保留兼容,实际始终按暗色渲染。
 export function getTheme(isDark) {
+  const dark = true;
   return {
-    color: ['#74B8FC', '#22C55E', '#F59E0B', '#EF4444', '#95CAFF'],
+    color: ['#7CE7FF', '#4ADE80', '#FFB03A', '#FF5C5C', '#A9F1FF', '#B48BFF'],
     backgroundColor: 'transparent',
     textStyle: {
       fontFamily: '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif',
       fontSize: 10,
-      color: isDark ? '#9CA3AF' : '#6B7280'
+      color: '#8494A3'
     },
     grid: {
       top: 12,
@@ -22,7 +24,7 @@ export function getTheme(isDark) {
       axisTick: { show: false },
       axisLabel: {
         fontSize: 9,
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: '#8494A3',
         interval: 'auto'
       },
       splitLine: { show: false }
@@ -33,7 +35,7 @@ export function getTheme(isDark) {
       axisTick: { show: false },
       axisLabel: {
         fontSize: 9,
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: '#8494A3',
         formatter: function (v) {
           if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M';
           if (v >= 1000) return (v / 1000).toFixed(0) + 'K';
@@ -42,7 +44,7 @@ export function getTheme(isDark) {
       },
       splitLine: {
         lineStyle: {
-          color: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+          color: 'rgba(124, 231, 255, 0.08)',
           type: 'dashed'
         }
       }
@@ -51,10 +53,10 @@ export function getTheme(isDark) {
       trigger: 'axis',
       appendToBody: true,
       confine: false,
-      backgroundColor: isDark ? 'rgba(30,32,38,0.95)' : 'rgba(255,255,255,0.95)',
-      borderColor: isDark ? '#3A3C45' : '#E5E7EB',
+      backgroundColor: 'rgba(10, 14, 18, 0.96)',
+      borderColor: 'rgba(124, 231, 255, 0.3)',
       textStyle: {
-        color: isDark ? '#E5E7EB' : '#1A1A2E',
+        color: '#E2ECF2',
         fontSize: 11
       }
     }
@@ -63,8 +65,8 @@ export function getTheme(isDark) {
 
 export function getBarTheme(isDark) {
   return {
-    textColor: isDark ? '#9CA3AF' : '#6B7280',
-    gridColor: isDark ? '#2A2C35' : '#F3F4F6',
-    axisLineColor: isDark ? '#3A3C45' : '#E5E7EB'
+    textColor: '#8494A3',
+    gridColor: 'rgba(124, 231, 255, 0.08)',
+    axisLineColor: '#22313D'
   };
 }
