@@ -150,11 +150,39 @@ body,
   justify-content: center;
   border: none;
   background: transparent;
-  border-radius: 8px;
+  border-radius: 6px;
   color: var(--text-secondary);
   cursor: pointer;
   padding: 0;
+  position: relative;
+  overflow: hidden;
   transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease, box-shadow 0.2s ease;
+}
+
+/* 工业渐变扫过:点击时一层黄绿渐变从左扫到右(终末地面板展开视效) */
+.titlebar-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 250, 0, 0.25) 30%,
+    rgba(0, 255, 162, 0.25) 55%,
+    transparent 90%
+  );
+  transform: translateX(-110%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.titlebar-btn.ef-sweep::after {
+  animation: ef-sweep 0.55s cubic-bezier(0.3, 0, 0.2, 1);
+}
+
+@keyframes ef-sweep {
+  0% { transform: translateX(-110%); opacity: 1; }
+  100% { transform: translateX(110%); opacity: 1; }
 }
 
 .titlebar-btn svg {
@@ -439,6 +467,9 @@ body.dark {
   color: var(--text-secondary);
   margin-top: 2px;
   line-height: 1.35;
+  /* 数值部分用等宽数字提升可读性 */
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
 }
 
 .opencode-model-list {
@@ -612,12 +643,18 @@ body.dark {
 }
 
 .quota-window-kind {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-primary);
+  letter-spacing: 0.04em;
 }
 
+/* 剩余百分比:等宽数字 + 荧光黄高亮(终末地数据读数风格) */
 .quota-window-used {
-  color: var(--text-secondary);
+  color: var(--primary);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  text-shadow: 0 0 8px rgba(255, 250, 0, 0.35);
 }
 
 .quota-bar {
@@ -648,9 +685,19 @@ body.dark {
   );
 }
 
+/* 重置时间:等宽数字 + 提亮,工业读数感(前缀箭头 + 计时) */
 .quota-window-reset {
   margin-top: 4px;
-  color: var(--text-secondary);
+  color: var(--text-primary);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.quota-window-reset::before {
+  content: '⟳ ';
+  color: var(--accent-green);
+  font-weight: 700;
 }
 
 .quota-card-cycle {

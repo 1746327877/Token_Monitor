@@ -7,6 +7,42 @@
 <title>设置</title>
 <link rel="stylesheet" href="css/main.css">
 <style>
+  /* ======== 终末地工业渐变展开入场 ========
+     面板自上而下展开(clip-path),一条黄绿渐变扫描线跟随,内容淡入 */
+  @keyframes ef-panel-in {
+    0% { opacity: 0; clip-path: inset(0 0 100% 0); }
+    55% { opacity: 1; }
+    100% { opacity: 1; clip-path: inset(0 0 0 0); }
+  }
+  @keyframes ef-scanline {
+    0% { top: 0; opacity: 1; }
+    85% { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+  @keyframes ef-content-in {
+    0% { opacity: 0; transform: translateY(6px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  #app {
+    animation: ef-panel-in 0.5s cubic-bezier(0.3, 0, 0.2, 1);
+    position: relative;
+  }
+  #app::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary), var(--success), var(--primary));
+    box-shadow: 0 0 12px rgba(255, 250, 0, 0.6);
+    animation: ef-scanline 0.5s cubic-bezier(0.3, 0, 0.2, 1) forwards;
+    pointer-events: none;
+    z-index: 100;
+  }
+  .settings-body > * {
+    animation: ef-content-in 0.55s ease-out;
+  }
   .settings-body {
     flex: 1;
     min-height: 0;
