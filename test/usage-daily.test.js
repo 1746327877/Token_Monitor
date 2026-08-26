@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { rollupDaily } = require('../src/main/core/locallog');
+const { rollupDaily, buildTokenCurve } = require('../src/main/core/locallog');
 
 // 本地时区日期键(与 localTodayStr 同款逻辑)
 function dayKey(iso) {
@@ -40,4 +40,28 @@ test('rollupDaily tolerates records without total by deriving it', () => {
 
 test('rollupDaily skips empty records list', () => {
   assert.deepEqual(rollupDaily([]), {});
+});
+
+test('buildTokenCurve sums all providers per day into cumulative/delta points', () => {
+  const usageDaily = {
+    'deepseek:2026-08-24': { total: 100 },
+    'opencode:2026-08-24': { total: 50 },
+    'command-goat:2026-08-24': { total: 30 },
+    'opencode:2026-08-25': { total: 70 },
+    'codex:2025-01-01': { total: 9999 }
+  };
+  const points = buildTokenCurve(usageDaily);
+  // 2025-01-01 超出 90 天窗口被截掉,只剩 08-24 / 08-25
+  assert.equal(points.length, 2);
+  // 08-24:三平台合计 180;08-25:70 → 累计 250
+  assert.equal(points[0].deltaTokens, 180);
+  assert.equal(points[0].totalTokens, 180);
+  assert.equal(points[1].deltaTokens, 70);
+  assert.equal(points[1].totalTokens, 250);
+  assert.equal(points[0].time, new Date('2026-08-24T00:00:00').getTime());
+});
+
+test('buildTokenCurve tolerates empty usageDaily', () => {
+  assert.deepEqual(buildTokenCurve({}), []);
+  assert.deepEqual(buildTokenCurve(null), []);
 });

@@ -318,7 +318,7 @@ const CURVE_CONFIGS = {
     tooltip: (theme, dom) => curveTooltip(theme, formatToken, dom),
     series: (isDark, totalData, deltaData) => [
       {
-        name: '累计 Token', type: 'line', smooth: true, showSymbol: false,
+        name: '全平台累计', type: 'line', smooth: true, showSymbol: false,
         lineStyle: { color: '#fffa00', width: 1.5 },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -329,8 +329,8 @@ const CURVE_CONFIGS = {
         data: totalData
       },
       {
-        name: '增量 Token', type: 'bar', barMaxWidth: 20,
-        itemStyle: { color: 'rgba(255,250,0,0.4)' },
+        name: '全平台每日增量', type: 'bar', barMaxWidth: 20,
+        itemStyle: { color: 'rgba(0,255,162,0.4)' },
         data: deltaData
       }
     ]

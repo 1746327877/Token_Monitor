@@ -106,4 +106,36 @@ function rollupDaily(records) {
   return out;
 }
 
-module.exports = { scanFiles, rollupDaily, localDayStr, localTzSec, walkFiles };
+// 全平台 Token 趋势曲线:usageDaily 按日跨 provider 求和 → 累计/增量点列。
+// 与每日 Token 消耗柱状图同源;最多取最近 maxDays 天(默认 90)。
+function buildTokenCurve(usageDaily, maxDays) {
+  const byDay = {};
+  Object.keys(usageDaily || {}).forEach((key) => {
+    const idx = key.indexOf(':');
+    if (idx <= 0) return;
+    const date = key.slice(idx + 1);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+    const total = Number(usageDaily[key] && usageDaily[key].total) || 0;
+    if (total <= 0) return;
+    byDay[date] = (byDay[date] || 0) + total;
+  });
+  const cutoff = Date.now() - (Number(maxDays) || 90) * 86400000;
+  const dates = Object.keys(byDay)
+    .filter((d) => new Date(d + 'T00:00:00').getTime() >= cutoff)
+    .sort();
+  let cum = 0;
+  return dates.map((date) => {
+    const delta = byDay[date];
+    cum += delta;
+    return {
+      time: new Date(date + 'T00:00:00').getTime(),
+      totalTokens: cum,
+      cumTokens: cum,
+      deltaTokens: delta,
+      totalCost: 0,
+      deltaCost: 0
+    };
+  });
+}
+
+module.exports = { scanFiles, rollupDaily, localDayStr, localTzSec, walkFiles, buildTokenCurve };

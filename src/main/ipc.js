@@ -2,6 +2,7 @@
 // 依赖由 index.js 注入(deps),窗口创建/生命周期仍留在 index.js。
 const { ipcMain, BrowserWindow } = require('electron');
 const { buildHeatmap } = require('./core/heatmap');
+const { buildTokenCurve } = require('./core/locallog');
 const { sanitizeSettings, isWritableSettingKey, resolveWritableSettingKey } = require('./core/settings-security');
 const { resetSettingsStore } = require('./core/settings-reset');
 const opencodeGoAuth = require('./providers/opencode-go/auth');
@@ -44,9 +45,10 @@ module.exports = function setupIPC(deps) {
       };
       payload.stats = stats;
       const curves = deps.buildCurvePoints(stats);
-      payload.curveToken = curves.token;
       payload.curveCost = curves.cost;
     }
+    // Token 消耗趋势:全平台汇总(usageDaily,与每日 Token 消耗柱状图同源)
+    payload.curveToken = buildTokenCurve(deps.store.get('usageDaily'));
     payload.proxyStatus = deps.runtime.proxyStatus;
     return payload;
   }
