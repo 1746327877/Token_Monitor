@@ -803,9 +803,48 @@ body.dark {
   height: 62px;
 }
 
-.heatmap-cum-bar {
-  width: 14px;
-  border-radius: 2px 2px 0 0;
+/* 按月柱状:宽柱 + 顶部数值标签,高度上限 120px */
+.heatmap-grid-monthly {
+  align-items: flex-end;
+  gap: 16px;
+  height: 150px;
+  padding: 2px 4px 0;
+}
+
+.heatmap-month-bar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  height: 100%;
+}
+
+.heatmap-month-bar {
+  width: 36px;
+  background: linear-gradient(180deg, rgba(255, 250, 0, 0.85), rgba(255, 250, 0, 0.35));
+  border: 1px solid rgba(255, 250, 0, 0.5);
+  border-bottom: none;
+  transition: filter 150ms ease-out;
+}
+
+.heatmap-month-bar:hover {
+  filter: brightness(1.25);
+  box-shadow: 0 0 12px rgba(255, 250, 0, 0.35);
+}
+
+.heatmap-month-bar-value {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 8px rgba(255, 250, 0, 0.35);
+}
+
+.heatmap-month-bar-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
 }
 
 .heatmap-months {

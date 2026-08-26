@@ -34,13 +34,13 @@ test('formatToken uses 亿 / 万 / thousands separators', () => {
   assert.equal(formatToken(8521), '8,521');
 });
 
-test('TokenHeatmap renders 53x7 grid with daily/weekly/cumulative tabs and tooltip copy', () => {
+test('TokenHeatmap renders 53x7 grid with daily/weekly/monthly tabs and tooltip copy', () => {
   assert.match(heatmapJsx, /buildWeeks/);
   assert.match(heatmapJsx, /colorLevel/);
   assert.match(heatmapJsx, /formatToken/);
   assert.match(heatmapJsx, /每日/);
   assert.match(heatmapJsx, /每周/);
-  assert.match(heatmapJsx, /累计/);
+  assert.match(heatmapJsx, /按月/);
   assert.match(heatmapJsx, /heatmap-tooltip/);
   assert.match(heatmapJsx, /getHeatmap/);
 });

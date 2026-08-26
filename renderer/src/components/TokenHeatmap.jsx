@@ -117,33 +117,34 @@ export default function TokenHeatmap({ provider = 'all', year = new Date().getFu
     return out;
   }, [data]);
 
-  // 累计模式:从年初逐日累加
-  const cumByDate = useMemo(() => {
-    const sorted = Object.keys(days).filter((d) => d.startsWith(year + '-')).sort();
-    const cum = {};
-    let acc = 0;
-    sorted.forEach((d) => {
-      acc += Number(days[d]) || 0;
-      cum[d] = acc;
+  // 按月模式:每月总 token(当月全部日值求和)
+  const monthTotals = useMemo(() => {
+    const out = {};
+    Object.keys(days).forEach((date) => {
+      if (!date.startsWith(year + '-')) return;
+      const mKey = date.slice(0, 7);
+      out[mKey] = (out[mKey] || 0) + (Number(days[date]) || 0);
     });
-    return cum;
+    return out;
   }, [days, year]);
-  const maxCum = Math.max(0, ...Object.values(cumByDate));
+  const maxMonth = Math.max(0, ...Object.values(monthTotals));
 
-  // 累计模式:分平台的年初至该日累计(tooltip 明细用)
-  const cumByProvider = useMemo(() => {
+  // 按月模式:分平台的月度合计(tooltip 明细用)
+  const monthByProvider = useMemo(() => {
     const det = data.details || {};
     const out = {};
     Object.keys(det.byProvider || {}).forEach((pid) => {
-      let acc = 0;
-      Object.keys(det.byProvider[pid] || {}).sort().forEach((date) => {
-        acc += Number(det.byProvider[pid][date]) || 0;
-        out[date] = out[date] || {};
-        out[date][pid] = acc;
+      Object.keys(det.byProvider[pid] || {}).forEach((date) => {
+        if (!date.startsWith(year + '-')) return;
+        const t = Number(det.byProvider[pid][date]) || 0;
+        if (t <= 0) return;
+        const mKey = date.slice(0, 7);
+        out[mKey] = out[mKey] || {};
+        out[mKey][pid] = (out[mKey][pid] || 0) + t;
       });
     });
     return out;
-  }, [data]);
+  }, [data, year]);
 
   // 取某列用于每周/累计的日期(该列最后一个 inYear 格)
   function lastInYearDate(col) {
@@ -258,9 +259,9 @@ export default function TokenHeatmap({ provider = 'all', year = new Date().getFu
       return lines;
     }
 
-    // 累计模式:年初至该日的各平台累计
+    // 按月模式:该月的各平台合计
     if (mode === 'cumulative') {
-      const cums = cumByProvider[date] || {};
+      const cums = monthByProvider[date] || {};
       pids.forEach((pid) => {
         const v = Number(cums[pid]) || 0;
         if (v > 0) {
@@ -349,22 +350,24 @@ export default function TokenHeatmap({ provider = 'all', year = new Date().getFu
     );
   }
 
-  function renderCumulative() {
+  function renderMonthly() {
+    const keys = Object.keys(monthTotals).sort();
     return (
-      <div className="heatmap-grid heatmap-grid-cumulative">
-        {visibleWeeks.map((col, i) => {
-          const c = start + i;
-          const date = columnTipDate(c);
-          const cum = date && cumByDate[date] ? cumByDate[date] : 0;
-          const height = maxCum > 0 ? Math.max(2, Math.round((cum / maxCum) * 60)) : 2;
+      <div className="heatmap-grid heatmap-grid-monthly">
+        {keys.map((mKey) => {
+          const total = monthTotals[mKey];
+          const height = maxMonth > 0 ? Math.max(8, Math.round((total / maxMonth) * 120)) : 8;
           return (
-            <div
-              key={c}
-              className="heatmap-cum-bar"
-              style={{ height: height, background: 'rgba(255,250,0,0.55)' }}
-              onMouseEnter={(e) => showTip(e, date)}
-              onMouseMove={moveTip} onMouseLeave={hideTip}
-            />
+            <div key={mKey} className="heatmap-month-bar-col">
+              <span className="heatmap-month-bar-value">{formatToken(total)}</span>
+              <div
+                className="heatmap-month-bar"
+                style={{ height: height }}
+                onMouseEnter={(e) => showTip(e, mKey)}
+                onMouseMove={moveTip} onMouseLeave={hideTip}
+              />
+              <span className="heatmap-month-bar-label">{parseInt(mKey.slice(5), 10) + '月'}</span>
+            </div>
           );
         })}
       </div>
@@ -385,11 +388,17 @@ export default function TokenHeatmap({ provider = 'all', year = new Date().getFu
     </div>
   );
 
-  // 浮层头部右侧的总量:每日=当日合计;每周=该 ISO 周合计;累计=年初至该日累计
-  function tipTotal(date) {
-    if (mode === 'weekly') return weekTotals[isoWeekKey(new Date(date + 'T00:00:00'))] || 0;
-    if (mode === 'cumulative') return cumByDate[date] || 0;
-    return Number(days[date]) || 0;
+  // 浮层头部右侧的总量:每日=当日合计;每周=该 ISO 周合计;按月=当月合计
+  function tipTotal(key) {
+    if (mode === 'weekly') return weekTotals[isoWeekKey(new Date(key + 'T00:00:00'))] || 0;
+    if (mode === 'cumulative') return monthTotals[key] || 0;
+    return Number(days[key]) || 0;
+  }
+
+  // tooltip 头部标签:按月模式传的是 'YYYY-MM' 月键
+  function tipLabel(key) {
+    if (/^\d{4}-\d{2}$/.test(String(key))) return parseInt(key.slice(5), 10) + '月';
+    return dateLabel(key);
   }
 
   return (
@@ -411,15 +420,15 @@ export default function TokenHeatmap({ provider = 'all', year = new Date().getFu
       <div className="heatmap-modes">
         {['daily', 'weekly', 'cumulative'].map((m) => (
           <button key={m} className={'heatmap-tab' + (mode === m ? ' active' : '')} onClick={() => setMode(m)}>
-            {{ daily: '每日', weekly: '每周', cumulative: '累计' }[m]}
+            {{ daily: '每日', weekly: '每周', cumulative: '按月' }[m]}
           </button>
         ))}
         {selProvider !== 'all' && selProvider !== 'deepseek' ? <span className="heatmap-local-only">仅本机</span> : null}
       </div>
       {mode === 'daily' ? renderDaily() : null}
       {mode === 'weekly' ? renderWeekly() : null}
-      {mode === 'cumulative' ? renderCumulative() : null}
-      {monthRow}
+      {mode === 'cumulative' ? renderMonthly() : null}
+      {mode !== 'cumulative' ? monthRow : null}
       <div className="heatmap-legend">
         <span>少</span>
         {[0, 1, 2, 3, 4].map((l) => (
@@ -430,7 +439,7 @@ export default function TokenHeatmap({ provider = 'all', year = new Date().getFu
       {tip ? (
         <div ref={tipRef} className={'heatmap-tooltip' + (tip.below ? ' below' : '') + (tip.fading ? ' fading' : '')} style={{ left: tip.x, top: tip.y }}>
           <div className="heatmap-tooltip-head">
-            <span className="heatmap-tooltip-date">{dateLabel(tip.date)}</span>
+            <span className="heatmap-tooltip-date">{tipLabel(tip.date)}</span>
             <span className="heatmap-tooltip-total">{formatToken(tipTotal(tip.date))} Token</span>
           </div>
           {(tip.overrideLines || tipLines(tip.date)).map((l, i) => (
