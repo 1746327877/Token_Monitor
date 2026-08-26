@@ -189,6 +189,15 @@ test('parseScrapedStats extracts tokens/runs/cost from the Studio overview', () 
   assert.equal(none.runs, 0);
 });
 
+test('parseScrapedStats estimates cost from the monthly percent when no dollar amount', () => {
+  // 新概览页格式: MONTHLY USAGE 34% of monthly limit used
+  const items = ['MONTHLY USAGE 34% of monthly limit used · resets Sep 17 TOTAL TOKENS 826.8M tokens TOTAL RUNS 2738 runs'];
+  const stats = parseScrapedStats(items);
+  assert.equal(stats.tokens, 826800000);
+  assert.equal(stats.runs, 2738);
+  assert.equal(stats.cost, Math.round(70 * 0.34 * 100) / 100); // $23.8
+});
+
 test('saveStats accumulates daily deltas so idle days stay at zero', () => {
   const store = makeStore();
   const today = localDayStr(Date.now());

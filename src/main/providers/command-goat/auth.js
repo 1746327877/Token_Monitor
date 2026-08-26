@@ -88,20 +88,26 @@ function saveStats(store, items) {
   let deltaCost = 0;
   if (prevCost > 0 && stats.cost >= prevCost) deltaCost = Math.round((stats.cost - prevCost) * 10000) / 10000;
   let deltaRuns = 0;
-  if (prevRuns > 0 && stats.runs >= prevRuns) deltaRuns = stats.runs - prevRuns;
+  // 单日运行增量不能超过月度总量;超了说明解析到无关数字,视为 0
+  if (prevRuns > 0 && stats.runs >= prevRuns && stats.runs - prevRuns <= stats.runs) {
+    deltaRuns = stats.runs - prevRuns;
+  }
 
   store.set(LAST_TOTAL_KEY, stats.tokens);
   store.set(LAST_COST_KEY, stats.cost);
   store.set(LAST_RUNS_KEY, stats.runs);
 
   const prevEntry = usageDaily['command-goat:' + today] || { input: 0, cached: 0, output: 0, total: 0, cost: 0, messages: 0, models: [] };
+  // 旧版本遗留的错误运行数(远超月度总量)→ 清零
+  const prevMessages = Number(prevEntry.messages) || 0;
+  const messages = prevMessages > stats.runs * 10 ? 0 : prevMessages + deltaRuns;
   usageDaily['command-goat:' + today] = {
     input: 0,
     cached: 0,
     output: prevEntry.output + delta,
     total: prevEntry.total + delta,
     cost: (prevEntry.cost || 0) + deltaCost,
-    messages: (prevEntry.messages || 0) + deltaRuns,
+    messages: messages,
     models: []
   };
   store.set('usageDaily', usageDaily);
@@ -297,17 +303,25 @@ async function fetchQuota(ctx) {
     await win.loadURL(USAGE_URL);
     const result = await waitForUsage(win, 25000);
     if (!result || !result.items || !result.items.length) {
+      // 页面加载了但没有用量数据:可能是会话过期被重定向到登录页
+      const url = result && result.url ? result.url : '';
+      const title = result && result.title ? result.title : '';
+      if (/signin|login|登录|sign in/i.test(url + ' ' + title)) {
+        logger.log('[command-goat] session expired (redirected to login)');
+        throw new Error('登录已过期，请重新登录');
+      }
       logger.log('[command-goat] poll scrape empty; keeping cached quota');
       return cachedQuota;
     }
+    // 统计保存与额度解析解耦:只要抓到页面就保存 tokens/每日增量,即使窗口解析失败
+    saveStats(store, result.items);
     const quota = parseScrapedUsage(result.items);
     if (!quota) {
-      logger.log('[command-goat] poll scrape unparsable; keeping cached quota');
+      logger.log('[command-goat] poll scrape unparsable; keeping cached quota (stats saved)');
       return cachedQuota;
     }
     cachedQuota = quota;
     cachedAt = Date.now();
-    saveStats(store, result.items);
     // 2) studio 概览页:月度 tokens/runs 统计
     try {
       await win.loadURL(STUDIO_URL);

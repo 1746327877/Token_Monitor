@@ -183,7 +183,8 @@ function parseScrapedUsage(items, now) {
 }
 
 // 从抓取文本提取月度使用统计:{ tokens, runs, cost }。
-// 概览页: "TOTAL TOKENS 471.4K tokens" / "TOTAL RUNS 1 runs" / "MONTHLY USAGE $0.12 of $70 used this month"
+// 概览页: "TOTAL TOKENS 471.4K tokens" / "TOTAL RUNS 1 runs" /
+//         "MONTHLY USAGE $0.12 of $70 used this month" 或新格式 "MONTHLY USAGE 34% of monthly limit used"
 function parseScrapedStats(items, now) {
   const text = (Array.isArray(items) ? items : [])
     .map((item) => (typeof item === 'string' ? item : String((item.label || '') + ' ' + (item.text || '') + ' ' + (item.value || ''))))
@@ -193,10 +194,17 @@ function parseScrapedStats(items, now) {
   const runsMatch = /total\s+runs\s*(\d+)/i.exec(text);
   const monthly = /\$\s*([\d.]+)\s*of\s*\$\s*([\d.]+)/i.exec(text);
 
+  let cost = monthly ? Math.max(0, parseFloat(monthly[1]) || 0) : 0;
+  // 新格式没有金额时,用月度百分比 × 月度上限 $70 估算已用金额
+  if (!cost) {
+    const monthlyPct = /monthly\s+usage\s+(\d+(?:\.\d+)?)\s*%/i.exec(text);
+    if (monthlyPct) cost = Math.round(LIMITS.monthly * (parseFloat(monthlyPct[1]) / 100) * 100) / 100;
+  }
+
   return {
     tokens: tokens,
     runs: runsMatch ? parseInt(runsMatch[1], 10) : 0,
-    cost: monthly ? Math.max(0, parseFloat(monthly[1]) || 0) : 0
+    cost: cost
   };
 }
 
