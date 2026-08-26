@@ -38,7 +38,6 @@ export default function TitleBar({ editing, onToggleLayoutEdit }) {
       </div>
       <div className="titlebar-actions">
         <button
-          {...btnProps('refresh')}
           className={'titlebar-btn' + (spinning ? ' spin-refresh' : '') + (sweep === 'refresh' ? ' ef-sweep' : '')}
           title="立即刷新"
           onClick={() => { onRefresh(); triggerSweep('refresh'); }}
