@@ -8,6 +8,11 @@ function formatTokens(n) {
   return value.toString();
 }
 
+// 数值变化时重新触发 ef-data-in 点亮动画(key 变化 → 节点重建 → 动画重跑)
+function FlashValue({ value, className }) {
+  return <div key={String(value)} className={className + ' ef-flash-value'}>{value}</div>;
+}
+
 function getBalanceClass(totalBalance) {
   const val = parseFloat(totalBalance);
   if (isNaN(val)) return 'primary';
@@ -44,7 +49,7 @@ export default function FeeCard({ id, balance, stats }) {
       return (
         <div className="fee-card-content">
           <div className="fee-card-value-wrap">
-            <div className={`fee-card-value ${cls}`}>¥{balance.total || '--'}</div>
+            <FlashValue value={'¥' + (balance.total || '--')} className={`fee-card-value ${cls}`} />
           </div>
           <div className="fee-card-sub">
             充值 {balance.toppedUp || '--'}<br />赠金 {balance.granted || '--'}
@@ -61,7 +66,7 @@ export default function FeeCard({ id, balance, stats }) {
       return (
         <div className="fee-card-content">
           <div className="fee-card-value-wrap">
-            <div className="fee-card-value primary">¥{stats.cost.todayCost.toFixed(2)}</div>
+            <FlashValue value={'¥' + stats.cost.todayCost.toFixed(2)} className="fee-card-value primary" />
           </div>
           <div className="fee-card-sub">
             {formatTokens(stats.token.todayTokens)} tokens<br />昨日:¥{yesterdayCost.toFixed(2)}
@@ -78,7 +83,7 @@ export default function FeeCard({ id, balance, stats }) {
       return (
         <div className="fee-card-content">
           <div className="fee-card-value-wrap">
-            <div className="fee-card-value primary">{rate}%</div>
+            <FlashValue value={rate + '%'} className="fee-card-value primary" />
           </div>
           <div className="fee-card-sub">
             命中 {formatTokens(stats.token.todayCacheHit)}<br />未命中 {formatTokens(stats.token.todayCacheMiss)}

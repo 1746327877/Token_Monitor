@@ -34,7 +34,7 @@ export default function CommandGoatStatsCard() {
   return (
     <div className="fee-card-content">
       <div className="fee-card-value-wrap">
-        <div className="fee-card-value primary">{formatTokens(stats.tokens)}</div>
+        <div key={String(stats.tokens)} className="fee-card-value primary ef-flash-value">{formatTokens(stats.tokens)}</div>
       </div>
       <div className="fee-card-sub">
         本月 Token<br />

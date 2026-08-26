@@ -43,7 +43,7 @@ export default function OpenCodeCard() {
   return (
     <div className="fee-card-content">
       <div className="fee-card-value-wrap">
-        <div className="fee-card-value primary">{formatTokens(today.tokens)}</div>
+        <div key={String(today.tokens)} className="fee-card-value primary ef-flash-value">{formatTokens(today.tokens)}</div>
       </div>
       <div className="fee-card-sub">
         今日 {formatCost(today.cost)} · {today.messages || 0} 条<br />

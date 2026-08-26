@@ -59,6 +59,21 @@ body,
   padding: 0 8px 0 12px;
   flex-shrink: 0;
   -webkit-app-region: drag;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 终末地标题栏:底部流动斜切光带(工业设备扫描感) */
+.titlebar::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, var(--primary), var(--accent-green), transparent);
+  animation: ef-title-slide 4.5s linear infinite;
+  pointer-events: none;
 }
 
 .titlebar-left {
@@ -209,6 +224,8 @@ body,
 
 .status-dot.online {
   background: var(--success);
+  box-shadow: 0 0 6px rgba(0, 255, 162, 0.6);
+  animation: ef-breathe 2.4s ease-in-out infinite;
 }
 
 .status-dot.offline {
@@ -254,6 +271,66 @@ body.dark {
   color: var(--text-primary);
 }
 
+/* ======== 终末地动态效果(官网 @keyframes 提炼) ======== */
+
+/* 多色渐变流动:黄→绿→粉 循环平移(官网三色渐变条的动态版) */
+@keyframes ef-gradient-flow {
+  0% { background-position: 0% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* 官网 flashing:opacity 闪烁几次后点亮(用于数值/角标触发) */
+@keyframes ef-flash {
+  0% { opacity: 0; }
+  15% { opacity: 0.9; }
+  30% { opacity: 0.25; }
+  45% { opacity: 0.9; }
+  60% { opacity: 0.25; }
+  80% { opacity: 0.9; }
+  100% { opacity: 1; }
+}
+
+/* 呼吸缩放(官网 scrollBreathing) */
+@keyframes ef-breathe {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.8; }
+}
+
+/* hover 时边框荧光闪烁(工业设备通电感) */
+@keyframes ef-border-flash {
+  0%, 100% { border-color: var(--border); box-shadow: var(--shadow-card); }
+  50% { border-color: var(--primary); box-shadow: 0 0 10px rgba(255, 250, 0, 0.35), var(--shadow-card); }
+}
+
+/* 数据更新点亮:数值变化时淡入(配合 React 的 key 变化触发) */
+@keyframes ef-data-in {
+  0% { opacity: 0.2; filter: brightness(1.8); }
+  100% { opacity: 1; filter: brightness(1); }
+}
+
+/* 数值节点:每次 key 变化重跑点亮动画 */
+.ef-flash-value {
+  animation: ef-data-in 0.7s ease-out;
+}
+
+/* 标题栏装饰斜切条:缓慢流动 */
+@keyframes ef-title-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* 尊重系统"减少动态效果"设置:关闭所有装饰动画 */
+@media (prefers-reduced-motion: reduce) {
+  .component-surface::before,
+  .component-surface::after,
+  .component-surface:hover,
+  .ef-flash-value,
+  .status-dot.online,
+  .titlebar::after {
+    animation: none !important;
+  }
+}
+
 /* ======== 仪表盘组件 ======== */
 .component-wrapper {
   touch-action: none;
@@ -283,12 +360,14 @@ body.dark {
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, var(--primary) 0%, var(--accent-green) 50%, var(--accent-pink) 100%);
+  background: linear-gradient(90deg, var(--primary) 0%, var(--accent-green) 33%, var(--accent-pink) 66%, var(--primary) 100%);
+  background-size: 200% 100%;
   opacity: 0.55;
   pointer-events: none;
+  animation: ef-gradient-flow 6s linear infinite;
 }
 
-/* 终末地斜切角标:左上角黄色斜切三角 */
+/* 终末地斜切角标:左上角黄色斜切三角,呼吸发光 */
 .component-surface::after {
   content: '';
   position: absolute;
@@ -299,6 +378,12 @@ body.dark {
   background: linear-gradient(135deg, var(--primary) 50%, transparent 50%);
   opacity: 0.6;
   pointer-events: none;
+  animation: ef-breathe 3.2s ease-in-out infinite;
+}
+
+/* hover:边框荧光闪烁(工业设备通电感) */
+.component-surface:hover {
+  animation: ef-border-flash 1.6s ease-in-out infinite;
 }
 
 .component-title {
