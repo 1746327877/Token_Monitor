@@ -274,6 +274,14 @@ module.exports = function setupIPC(deps) {
     if (getMain()) getMain().hide();
   });
 
+  // 切换主窗口置顶:写回设置并广播,标题栏图钉按钮同步状态
+  ipcMain.on('window:toggle-always-on-top', () => {
+    const next = !deps.store.get('window.alwaysOnTop');
+    deps.store.set('window.alwaysOnTop', next);
+    if (getMain()) getMain().setAlwaysOnTop(next);
+    deps.broadcastSettings();
+  });
+
   ipcMain.on('zoom:change', (event, { delta }) => {
     if (!getMain() || getMain().isDestroyed()) return;
     var current = getMain().webContents.getZoomFactor();

@@ -1,14 +1,21 @@
-// 标题栏:刷新/设置/布局编辑/最小化/关闭按钮,图标沿用旧 SVG。
+// 标题栏:刷新/设置/布局编辑/置顶图钉/最小化/关闭按钮,图标沿用旧 SVG。
 // 关闭按钮行为与旧版一致(隐藏到托盘 = window:minimize)。
 // 刷新/设置点击有短暂图标动画;布局编辑按钮切换激活外观表示"编排中"。
 // 点击任意按钮触发 ef-sweep 工业渐变扫过视效。
-import React, { useState } from 'react';
-import { send } from '../api.js';
+import React, { useState, useEffect } from 'react';
+import { send, getSettings, on } from '../api.js';
 
 export default function TitleBar({ editing, onToggleLayoutEdit }) {
   const [spinning, setSpinning] = useState(false);
   const [gearTap, setGearTap] = useState(false);
   const [sweep, setSweep] = useState('');
+  const [onTop, setOnTop] = useState(true);
+
+  // 置顶状态:初始读取设置,之后跟随设置广播(含图钉切换与设置窗口开关)
+  useEffect(() => {
+    getSettings().then((s) => setOnTop(!!(s && s.window && s.window.alwaysOnTop))).catch(() => {});
+    return on('settings:loaded', (s) => setOnTop(!!(s && s.window && s.window.alwaysOnTop)));
+  }, []);
 
   const onRefresh = () => {
     send('refresh:dashboard');
@@ -54,6 +61,16 @@ export default function TitleBar({ editing, onToggleLayoutEdit }) {
           onAnimationEnd={() => { if (sweep === 'layout') setSweep(''); }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="7" rx="2" /><rect x="3" y="14" width="8" height="6" rx="1.5" /><rect x="13" y="14" width="8" height="6" rx="1.5" /></svg>
+        </button>
+        <button
+          className={'titlebar-btn titlebar-btn-pin' + (onTop ? ' active' : '') + (sweep === 'pin' ? ' ef-sweep' : '')}
+          title={onTop ? '取消置顶' : '窗口置顶'}
+          aria-label="窗口置顶"
+          aria-pressed={onTop ? 'true' : 'false'}
+          onClick={() => { send('window:toggle-always-on-top'); triggerSweep('pin'); }}
+          onAnimationEnd={() => { if (sweep === 'pin') setSweep(''); }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill={onTop ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="17" x2="12" y2="22" /><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24z" /></svg>
         </button>
         <button
           className={'titlebar-btn' + (gearTap ? ' spin-gear' : '') + (sweep === 'settings' ? ' ef-sweep' : '')}

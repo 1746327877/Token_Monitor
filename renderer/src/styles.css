@@ -211,6 +211,18 @@ body,
   color: #101012;
 }
 
+/* 置顶图钉激活态:荧光黄实心 + 发光,明确"当前置顶中" */
+.titlebar-btn-pin.active {
+  background: rgba(255, 250, 0, 0.14);
+  color: var(--primary);
+  box-shadow: 0 0 8px rgba(255, 250, 0, 0.35);
+}
+
+.titlebar-btn-pin.active:hover {
+  background: rgba(255, 250, 0, 0.24);
+  color: var(--primary);
+}
+
 /* 点击小动画:刷新转一整圈,设置齿轮轻转回弹 */
 .titlebar-btn.spin-refresh svg {
   animation: tb-spin 0.55s cubic-bezier(0.4, 0, 0.2, 1);

@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('api', {
       'login:command-goat',
       'provider:reauth',
       'window:minimize',
+      'window:toggle-always-on-top',
       'window:close',
       'window:close-settings',
       'refresh:dashboard',
