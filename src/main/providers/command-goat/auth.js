@@ -47,7 +47,7 @@ const LAST_COST_KEY = 'providers.command-goat.lastCost';
 const LAST_RUNS_KEY = 'providers.command-goat.lastRuns';
 const HISTORY_RESTORED_KEY = 'providers.command-goat.historyRestored';
 
-function saveStats(store, items) {
+function saveStats(store, items, tag) {
   if (!store) return;
   const stats = parseScrapedStats(items);
   store.set(STATS_KEY, stats);
@@ -111,17 +111,17 @@ function saveStats(store, items) {
     models: []
   };
   store.set('usageDaily', usageDaily);
-  writeDebugDump(store, items);
+  writeDebugDump(store, items, tag);
 }
 
-// 把抓取到的原始文本写入调试文件,便于排查页面格式问题(打包版也能拿到)。
-function writeDebugDump(store, items) {
+// 把抓取到的原始文本写入调试文件(usage/studio 分开),便于排查页面格式问题。
+function writeDebugDump(store, items, tag) {
   try {
     const { app } = require('electron');
     const fs = require('fs');
     const path = require('path');
     const dir = app.getPath('userData');
-    const file = path.join(dir, 'command-goat-debug.json');
+    const file = path.join(dir, 'command-goat-debug-' + (tag || 'usage') + '.json');
     const payload = {
       at: new Date().toISOString(),
       items: items
@@ -154,14 +154,21 @@ function scrapeUsageScript() {
     'var isWeekly = /weekly|本\\s*周/i;' +
     'var isTokens = /total\\s*tokens|tokens/i;' +
     'var isRuns = /total\\s*runs|runs/i;' +
-    'var isWindowLabel = function (l) { return isMonthly.test(l) || is5h.test(l) || isWeekly.test(l); };' +
+    'var labelType = function (l) {' +
+    '  if (is5h.test(l)) return "5h";' +
+    '  if (isWeekly.test(l)) return "weekly";' +
+    '  if (isMonthly.test(l)) return "monthly";' +
+    '  return null;' +
+    '};' +
     'var bodyText = document.body ? document.body.innerText : "";' +
     'var lines = bodyText.split("\\n").map(function (l) { return l.trim(); }).filter(Boolean);' +
     'for (var i = 0; i < lines.length; i++) {' +
-    '  if (!isWindowLabel(lines[i]) && !isTokens.test(lines[i]) && !isRuns.test(lines[i])) continue;' +
+    '  var t0 = labelType(lines[i]);' +
+    '  if (!t0 && !isTokens.test(lines[i]) && !isRuns.test(lines[i])) continue;' +
     '  var block = lines[i];' +
     '  for (var j = i + 1; j < Math.min(lines.length, i + 15); j++) {' +
-    '    if (isWindowLabel(lines[j])) break;' + // 遇到下一个窗口标签即停,避免块内混入其他窗口
+    '    var jt = labelType(lines[j]);' +
+    '    if (jt && jt !== t0) break;' + // 只在遇到"不同类型"窗口标签时截断;同类续行(如 monthly 换行)继续拼接
     '    block += " " + lines[j];' +
     '  }' +
     '  add(block);' +
@@ -245,13 +252,13 @@ function captureSession(ctx) {
         return;
       }
       logger.log('[command-goat] captured usage from DOM, windows:', quota.windows.map((w) => w.kind).join(','));
-      saveStats(ctx && ctx.store, result.items);
+      saveStats(ctx && ctx.store, result.items, 'usage');
       // 2) studio 概览页:月度 tokens/runs 统计
       try {
         await win.loadURL(STUDIO_URL);
         const statsResult = await waitForUsage(win, 25000);
         if (statsResult && statsResult.items && statsResult.items.length) {
-          saveStats(ctx && ctx.store, statsResult.items);
+          saveStats(ctx && ctx.store, statsResult.items, 'studio');
         }
       } catch (e) {
         logger.log('[command-goat] stats page scrape failed:', e && e.message ? e.message : e);
@@ -314,7 +321,7 @@ async function fetchQuota(ctx) {
       return cachedQuota;
     }
     // 统计保存与额度解析解耦:只要抓到页面就保存 tokens/每日增量,即使窗口解析失败
-    saveStats(store, result.items);
+    saveStats(store, result.items, 'usage');
     const quota = parseScrapedUsage(result.items);
     if (!quota) {
       logger.log('[command-goat] poll scrape unparsable; keeping cached quota (stats saved)');
@@ -327,7 +334,7 @@ async function fetchQuota(ctx) {
       await win.loadURL(STUDIO_URL);
       const statsResult = await waitForUsage(win, 20000);
       if (statsResult && statsResult.items && statsResult.items.length) {
-        saveStats(store, statsResult.items);
+        saveStats(store, statsResult.items, 'studio');
       }
     } catch (e) {
       logger.log('[command-goat] stats page poll failed:', e && e.message ? e.message : e);

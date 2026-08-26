@@ -36,24 +36,23 @@ function parseResetSeconds(text, now) {
 
   if (/few second|几秒/i.test(clean)) return 0;
 
-  // 相对时长:只取第一段连续时长(到第一个非时长字符为止),不扫描整块
-  const firstToken = /\d+\s*(?:天|小时|分钟|day|hour|minute|[dhms])/i.exec(clean);
-  if (firstToken) {
-    const cluster = clean.slice(firstToken.index).match(/^(?:\d+\s*(?:天|小时|分钟|day|hour|minute|[dhms])\s*)+/i);
-    if (cluster) {
-      let total = 0;
-      const re = /(\d+)\s*(天|小时|分钟|day|hour|minute|[dhms])/gi;
-      let m;
-      while ((m = re.exec(cluster[0]))) {
-        const n = parseInt(m[1], 10);
-        const unit = m[2].toLowerCase();
-        if (unit.indexOf('天') !== -1 || unit === 'd' || unit.indexOf('day') === 0) total += n * 86400;
-        else if (unit.indexOf('小') !== -1 || unit === 'h' || unit.indexOf('hour') === 0) total += n * 3600;
-        else if (unit.indexOf('分') !== -1 || unit === 'm' || unit.indexOf('min') === 0) total += n * 60;
-        else if (unit === 's') total += n;
-      }
-      if (total > 0) return total;
+  // 相对时长:只取紧跟关键词的第一段连续时长(锚定开头),不扫描整块。
+  // 锚定可避免 "TOTAL TOKENS 999.9M" 里的 "9M" 被误读成 9 分钟。
+  const lead = clean.replace(/^[^0-9]{0,8}/, '');
+  const cluster = lead.match(/^(?:\d+\s*(?:天|小时|分钟|day|hour|minute|[dhms])\s*)+/i);
+  if (cluster) {
+    let total = 0;
+    const re = /(\d+)\s*(天|小时|分钟|day|hour|minute|[dhms])/gi;
+    let m;
+    while ((m = re.exec(cluster[0]))) {
+      const n = parseInt(m[1], 10);
+      const unit = m[2].toLowerCase();
+      if (unit.indexOf('天') !== -1 || unit === 'd' || unit.indexOf('day') === 0) total += n * 86400;
+      else if (unit.indexOf('小') !== -1 || unit === 'h' || unit.indexOf('hour') === 0) total += n * 3600;
+      else if (unit.indexOf('分') !== -1 || unit === 'm' || unit.indexOf('min') === 0) total += n * 60;
+      else if (unit === 's') total += n;
     }
+    if (total > 0) return total;
   }
 
   // 月名 + 日:"Sep 17" / "9月17日" / "September 17" → 下一次该日期(过了则次年)

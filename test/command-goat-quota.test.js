@@ -128,6 +128,15 @@ test('parseScrapedUsage captures the monthly credit pool from the Studio overvie
   assert.equal(monthly.resetsAt, null);
 });
 
+test('parseResetSeconds ignores token counts like 999.9M after the reset keyword', () => {
+  const now = new Date(2026, 7, 18, 10, 0, 0).getTime();
+  // 页面真实文本:重置词后面跟着 "Sep 17" 和 "999.9M tokens" —
+  // "9M" 不得被误读成 9 分钟,应解析月名日期 Sep 17
+  const monthly = 'MONTHLY USAGE 40% of monthly limit used · resets Sep 17 TOTAL TOKENS 999.9M tokens TOTAL RUNS 3345 runs';
+  const secs = parseResetSeconds(monthly, now);
+  assert.equal(secs, Math.round((new Date(2026, 8, 17).getTime() - now) / 1000));
+});
+
 test('parseScrapedUsage dedupes duplicate windows (same kind matched multiple times)', () => {
   // 页面里同一窗口可能被多处匹配:monthly 出现在概览 + 使用页,5h 也可能出现两次
   const items = [

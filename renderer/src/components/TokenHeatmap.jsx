@@ -154,6 +154,17 @@ export default function TokenHeatmap({ provider = 'all', year = new Date().getFu
     return null;
   }
 
+  // 每周/累计柱的悬停日期:该列内最后一个"有数据"的日期。
+  // 当前列的最后 inYear 日期可能是未来(本周未过完),查累计表会落空。
+  function columnTipDate(col) {
+    const cells = weeks[col] || [];
+    for (let r = cells.length - 1; r >= 0; r--) {
+      const cell = cells[r];
+      if (cell && cell.inYear && days[cell.date] !== undefined) return cell.date;
+    }
+    return lastInYearDate(col);
+  }
+
   // 自定义悬停提示(原生 title 在透明窗口不显示;内容:日期 + 平台/模型明细)
   // 初始位置用估计半宽钳制,渲染后由 useLayoutEffect 按实测宽度二次校正(向窗口中间靠拢)
   const clampTipX = (x) => Math.max(104, Math.min(window.innerWidth - 104, x));
@@ -317,7 +328,7 @@ export default function TokenHeatmap({ provider = 'all', year = new Date().getFu
       <div className="heatmap-grid heatmap-grid-weekly">
         {visibleWeeks.map((col, i) => {
           const c = start + i;
-          const date = lastInYearDate(c);
+          const date = columnTipDate(c);
           const total = date && weekTotals[isoWeekKey(new Date(date + 'T00:00:00'))] ? weekTotals[isoWeekKey(new Date(date + 'T00:00:00'))] : 0;
           const level = colorLevel(total, maxWeek);
           return (
@@ -343,7 +354,7 @@ export default function TokenHeatmap({ provider = 'all', year = new Date().getFu
       <div className="heatmap-grid heatmap-grid-cumulative">
         {visibleWeeks.map((col, i) => {
           const c = start + i;
-          const date = lastInYearDate(c);
+          const date = columnTipDate(c);
           const cum = date && cumByDate[date] ? cumByDate[date] : 0;
           const height = maxCum > 0 ? Math.max(2, Math.round((cum / maxCum) * 60)) : 2;
           return (
