@@ -849,22 +849,38 @@ body.dark {
   border-radius: 2px;
 }
 
-/* 自定义悬停提示:原生 title 在透明窗口不显示 */
+/* 自定义悬停提示:终末地 HUD 数据面板(黑底 + 荧光黄描边 + 斜切角 + 顶部渐变线) */
 .heatmap-tooltip {
   position: fixed;
   transform: translate(-50%, -100%);
-  background: rgba(10, 14, 18, 0.96);
-  color: #fff;
-  padding: 6px 10px;
-  border-radius: 8px;
+  background: rgba(15, 15, 17, 0.96);
+  color: var(--text-primary);
+  padding: 7px 11px 8px;
+  border: 1px solid rgba(255, 250, 0, 0.45);
+  border-radius: 2px;
+  /* 右上角斜切(终末地面板切割) */
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
   font-size: 11px;
-  line-height: 1.5;
+  line-height: 1.55;
   pointer-events: none;
   z-index: 10000;
   white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  min-width: 150px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 4px 16px rgba(0, 0, 0, 0.6);
   transition: left 0.12s ease-out, top 0.12s ease-out, opacity 0.26s ease-out;
   animation: heatmap-tip-in 260ms ease-out;
+}
+
+/* 顶部三色渐变细线 */
+.heatmap-tooltip::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--primary), var(--accent-green), var(--accent-pink));
+  opacity: 0.7;
 }
 
 @keyframes heatmap-tip-in {
@@ -882,18 +898,24 @@ body.dark {
   justify-content: space-between;
   align-items: baseline;
   gap: 14px;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid rgba(255, 250, 0, 0.25);
 }
 
 .heatmap-tooltip-date {
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: 0.05em;
 }
 
 /* 头部右侧总消耗量 */
 .heatmap-tooltip-total {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--primary);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 8px rgba(255, 250, 0, 0.35);
 }
 
 .heatmap-tooltip.below {
@@ -903,11 +925,21 @@ body.dark {
 .heatmap-tooltip-row {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   gap: 14px;
+  margin-top: 2px;
 }
 
 .heatmap-tooltip-label {
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--text-secondary);
+}
+
+/* 数值:等宽数字 + 提亮,工业读数感 */
+.heatmap-tooltip-value {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
 }
 
 

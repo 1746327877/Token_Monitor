@@ -46,6 +46,11 @@ function buildOption(dom, details, dates) {
       position: windowClampedPosition(dom),
       axisPointer: { type: 'shadow' },
       textStyle: { fontSize: 11 },
+      backgroundColor: 'rgba(15, 15, 17, 0.96)',
+      borderColor: 'rgba(255, 250, 0, 0.45)',
+      borderWidth: 1,
+      borderRadius: 2,
+      extraCssText: 'padding:8px 11px;box-shadow:0 4px 16px rgba(0,0,0,0.6);',
       formatter: (params) => {
         const date = params && params[0] ? dates[params[0].dataIndex] : '';
         let total = 0;
@@ -53,15 +58,27 @@ function buildOption(dom, details, dates) {
         (params || []).forEach((p) => { total += p.value || 0; lookup[p.seriesName] = p; });
         const cachedSuffix = (pid) => {
           const c = cachedByProvider[pid] && Number(cachedByProvider[pid][date]);
-          return c > 0 ? '（缓存 ' + formatWan(c) + '）' : '';
+          return c > 0 ? '<span style="color:#9a9a9a;font-size:10px;"> +' + formatWan(c) + '缓存</span>' : '';
         };
+        // 终末地 HUD 行:方形色块 + 灰标签 + 等宽数值右对齐
+        const row = (color, name, val, extra) =>
+          '<div style="display:flex;align-items:baseline;gap:7px;margin-top:4px;">' +
+          '<span style="display:inline-block;width:7px;height:7px;background:' + color + '"></span>' +
+          '<span style="flex:1;color:#9a9a9a;">' + name + '</span>' +
+          (extra || '') +
+          '<span style="color:#e5e5e5;font-family:Consolas,Menlo,monospace;font-weight:600;">' + val + '</span>' +
+          '</div>';
         // 显示顺序与堆叠视觉一致:自上而下 Command Goat → OpenCode → DeepSeek → Kimi → Codex
         const parts = STACK.slice().reverse().map((provider) => {
           const p = lookup[provider.label];
           if (!p) return '';
-          return '<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' + p.color + '"></span> ' + provider.label + ': ' + formatWan(p.value) + ' Token' + cachedSuffix(provider.id);
+          return row(provider.color, provider.label, formatWan(p.value), cachedSuffix(provider.id));
         });
-        return '<b>' + (params[0] ? params[0].axisValue : '') + '</b><br/>' + parts.join('<br/>') + '<br/><b>合计: ' + formatWan(total) + ' Token</b>';
+        const head = '<div style="color:#fffa00;font-weight:700;letter-spacing:.05em;border-bottom:1px solid rgba(255,250,0,.25);padding-bottom:3px;margin-bottom:1px;">' + (params[0] ? params[0].axisValue : '') + '</div>';
+        const totalRow = '<div style="margin-top:5px;padding-top:4px;border-top:1px solid rgba(255,250,0,.25);display:flex;justify-content:space-between;align-items:baseline;gap:10px;">' +
+          '<span style="color:#fffa00;font-weight:700;letter-spacing:.05em;">合计</span>' +
+          '<span style="color:#fffa00;font-weight:700;font-family:Consolas,Menlo,monospace;text-shadow:0 0 8px rgba(255,250,0,.35);">' + formatWan(total) + '</span></div>';
+        return '<div style="min-width:150px;">' + head + parts.join('') + totalRow + '</div>';
       }
     },
     xAxis: Object.assign({ type: 'category', data: dates.map((d) => d.slice(5)) }, density.xAxis),

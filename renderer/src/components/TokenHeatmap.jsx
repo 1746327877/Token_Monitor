@@ -101,6 +101,22 @@ export default function TokenHeatmap({ provider = 'all', year = new Date().getFu
   }, [days]);
   const maxWeek = Math.max(0, ...Object.values(weekTotals));
 
+  // 每周模式:分平台的周合计(tooltip 明细用)
+  const weekByProvider = useMemo(() => {
+    const det = data.details || {};
+    const out = {};
+    Object.keys(det.byProvider || {}).forEach((pid) => {
+      Object.keys(det.byProvider[pid] || {}).forEach((date) => {
+        const t = Number(det.byProvider[pid][date]) || 0;
+        if (t <= 0) return;
+        const key = isoWeekKey(new Date(date + 'T00:00:00'));
+        out[pid] = out[pid] || {};
+        out[pid][key] = (out[pid][key] || 0) + t;
+      });
+    });
+    return out;
+  }, [data]);
+
   // 累计模式:从年初逐日累加
   const cumByDate = useMemo(() => {
     const sorted = Object.keys(days).filter((d) => d.startsWith(year + '-')).sort();
@@ -113,6 +129,21 @@ export default function TokenHeatmap({ provider = 'all', year = new Date().getFu
     return cum;
   }, [days, year]);
   const maxCum = Math.max(0, ...Object.values(cumByDate));
+
+  // 累计模式:分平台的年初至该日累计(tooltip 明细用)
+  const cumByProvider = useMemo(() => {
+    const det = data.details || {};
+    const out = {};
+    Object.keys(det.byProvider || {}).forEach((pid) => {
+      let acc = 0;
+      Object.keys(det.byProvider[pid] || {}).sort().forEach((date) => {
+        acc += Number(det.byProvider[pid][date]) || 0;
+        out[date] = out[date] || {};
+        out[date][pid] = acc;
+      });
+    });
+    return out;
+  }, [data]);
 
   // 取某列用于每周/累计的日期(该列最后一个 inYear 格)
   function lastInYearDate(col) {
@@ -198,10 +229,45 @@ export default function TokenHeatmap({ provider = 'all', year = new Date().getFu
       const c = cachedByProvider[pid] && Number(cachedByProvider[pid][date]);
       return c > 0 ? '（缓存 ' + formatToken(c) + '）' : '';
     };
+    // 当前视图下的平台清单(选中单个平台时只列它)
+    const pids = (selProvider === 'all'
+      ? PROVIDER_OPTS.filter((p) => p.id !== 'all').map((p) => p.id)
+      : [selProvider]);
+
+    // 每周模式:该周的各平台合计(而非最后一天的日值)
+    if (mode === 'weekly') {
+      const key = isoWeekKey(new Date(date + 'T00:00:00'));
+      pids.forEach((pid) => {
+        const wk = weekByProvider[pid] && Number(weekByProvider[pid][key]);
+        if (wk > 0) {
+          const p = PROVIDER_OPTS.find((o) => o.id === pid);
+          lines.push({ label: p ? p.label : pid, value: formatToken(wk) + ' Token' });
+        }
+      });
+      return lines;
+    }
+
+    // 累计模式:年初至该日的各平台累计
+    if (mode === 'cumulative') {
+      const cums = cumByProvider[date] || {};
+      pids.forEach((pid) => {
+        const v = Number(cums[pid]) || 0;
+        if (v > 0) {
+          const p = PROVIDER_OPTS.find((o) => o.id === pid);
+          lines.push({ label: p ? p.label : pid, value: formatToken(v) + ' Token' });
+        }
+      });
+      return lines;
+    }
+
+    // 每日模式:当日各平台明细
     if (selProvider === 'all') {
-      PROVIDER_OPTS.filter((p) => p.id !== 'all').forEach((p) => {
-        const t = byProvider[p.id] && Number(byProvider[p.id][date]);
-        if (t > 0) lines.push({ label: p.label, value: formatToken(t) + ' Token' + cachedSuffix(p.id) });
+      pids.forEach((pid) => {
+        const t = byProvider[pid] && Number(byProvider[pid][date]);
+        if (t > 0) {
+          const p = PROVIDER_OPTS.find((o) => o.id === pid);
+          lines.push({ label: p ? p.label : pid, value: formatToken(t) + ' Token' + cachedSuffix(pid) });
+        }
       });
     } else if (selProvider === 'deepseek') {
       if (total > 0) lines.push({ label: 'DeepSeek 合计', value: formatToken(total) + ' Token' + cachedSuffix('deepseek') });
@@ -285,7 +351,7 @@ export default function TokenHeatmap({ provider = 'all', year = new Date().getFu
               key={c}
               className="heatmap-cum-bar"
               style={{ height: height, background: 'rgba(255,250,0,0.55)' }}
-              onMouseEnter={(e) => showTip(e, date, cum > 0 ? [{ label: '累计消耗', value: formatToken(cum) + ' Token' }] : null)}
+              onMouseEnter={(e) => showTip(e, date)}
               onMouseMove={moveTip} onMouseLeave={hideTip}
             />
           );

@@ -180,6 +180,26 @@ export function windowClampedPosition(dom) {
   };
 }
 
+// 终末地 HUD tooltip 公共容器样式
+const EF_TIP_CONTAINER = {
+  backgroundColor: 'rgba(15, 15, 17, 0.96)',
+  borderColor: 'rgba(255, 250, 0, 0.45)',
+  borderWidth: 1,
+  borderRadius: 2,
+  extraCssText: 'padding:8px 11px;box-shadow:0 4px 16px rgba(0,0,0,0.6);'
+};
+// 终末地 HUD 行:方形色块 + 灰标签 + 等宽数值右对齐
+function efRow(color, name, val) {
+  return '<div style="display:flex;align-items:baseline;gap:7px;margin-top:4px;">' +
+    '<span style="display:inline-block;width:7px;height:7px;background:' + color + '"></span>' +
+    '<span style="flex:1;color:#9a9a9a;">' + name + '</span>' +
+    '<span style="color:#e5e5e5;font-family:Consolas,Menlo,monospace;font-weight:600;">' + val + '</span>' +
+    '</div>';
+}
+function efHead(text) {
+  return '<div style="color:#fffa00;font-weight:700;letter-spacing:.05em;border-bottom:1px solid rgba(255,250,0,.25);padding-bottom:3px;margin-bottom:1px;">' + text + '</div>';
+}
+
 function buildDailyOption(dom, dailyData) {
   const isDark = document.body.classList.contains('dark');
   const t = getBarTheme(isDark);
@@ -210,6 +230,11 @@ function buildDailyOption(dom, dailyData) {
       position: windowClampedPosition(dom),
       axisPointer: { type: 'shadow' },
       textStyle: { fontSize: 11 },
+      backgroundColor: EF_TIP_CONTAINER.backgroundColor,
+      borderColor: EF_TIP_CONTAINER.borderColor,
+      borderWidth: EF_TIP_CONTAINER.borderWidth,
+      borderRadius: EF_TIP_CONTAINER.borderRadius,
+      extraCssText: EF_TIP_CONTAINER.extraCssText,
       formatter: (params) => {
         let total = 0;
         const lookup = {};
@@ -218,9 +243,12 @@ function buildDailyOption(dom, dailyData) {
         const parts = order.map((name) => {
           const p = lookup[name];
           if (!p) return '';
-          return '<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' + p.color + '"></span> ' + name + ': ' + formatToken(p.value);
+          return efRow(p.color, name, formatToken(p.value));
         });
-        return '<b>' + (params[0] ? params[0].axisValue : '') + '</b><br/>' + parts.join('<br/>') + '<br/><b>合计: ' + formatToken(total) + '</b>';
+        const totalRow = '<div style="margin-top:5px;padding-top:4px;border-top:1px solid rgba(255,250,0,.25);display:flex;justify-content:space-between;align-items:baseline;gap:10px;">' +
+          '<span style="color:#fffa00;font-weight:700;letter-spacing:.05em;">合计</span>' +
+          '<span style="color:#fffa00;font-weight:700;font-family:Consolas,Menlo,monospace;text-shadow:0 0 8px rgba(255,250,0,.35);">' + formatToken(total) + '</span></div>';
+        return '<div style="min-width:140px;">' + efHead(params[0] ? params[0].axisValue : '') + parts.join('') + totalRow + '</div>';
       }
     },
     xAxis: Object.assign({ type: 'category', data: dates }, density.xAxis),
@@ -261,21 +289,24 @@ function buildCurveOption(dom, points, config) {
   };
 }
 
-// 与 model-bar 一致的悬浮窗:加粗日期头 + 圆点行;axisPointer 竖线跟随
+// 与终末地 HUD 面板一致的悬浮窗:黄色日期头 + 方块色行 + 等宽数值;axisPointer 竖线跟随
 function curveTooltip(theme, formatValue, dom) {
   return {
     trigger: 'axis',
     appendToBody: true,
     position: windowClampedPosition(dom),
     axisPointer: { type: 'line' },
-    backgroundColor: theme.tooltip.backgroundColor,
-    borderColor: theme.tooltip.borderColor,
-    textStyle: theme.tooltip.textStyle,
+    backgroundColor: 'rgba(15, 15, 17, 0.96)',
+    borderColor: 'rgba(255, 250, 0, 0.45)',
+    borderWidth: 1,
+    borderRadius: 2,
+    extraCssText: 'padding:8px 11px;box-shadow:0 4px 16px rgba(0,0,0,0.6);',
+    textStyle: { color: '#e5e5e5', fontSize: 11 },
     formatter: (params) => {
-      const rows = (params || []).map((p) => {
-        return '<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' + p.color + '"></span> ' + p.seriesName + ': ' + formatValue(p.value || 0);
-      }).join('<br/>');
-      return '<b>' + (params && params[0] ? params[0].axisValue : '') + '</b><br/>' + rows;
+      const rows = (params || []).map((p) =>
+        efRow(p.color, p.seriesName, formatValue(p.value || 0))
+      ).join('');
+      return '<div style="min-width:130px;">' + efHead(params && params[0] ? params[0].axisValue : '') + rows + '</div>';
     }
   };
 }
