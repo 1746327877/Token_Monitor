@@ -10,11 +10,11 @@ import { barDensity, isCardMode, formatToken, windowClampedPosition } from './Ch
 const DAYS = 31;
 // 堆叠顺序即 series 顺序:第一个在底部;颜色在品牌色基础上降纯度,柔和但不发灰
 const STACK = [
-  { id: 'codex', label: 'Codex', color: '#F2A05C' },
-  { id: 'kimi', label: 'Kimi', color: '#4ECB94' },
-  { id: 'deepseek', label: 'DeepSeek', color: '#6E94F5' },
-  { id: 'opencode', label: 'OpenCode', color: '#C084FC' },
-  { id: 'command-goat', label: 'Command Goat', color: '#F472B6' }
+  { id: 'codex', label: 'Codex', color: '#00ffa2' },
+  { id: 'kimi', label: 'Kimi', color: '#ff1aac' },
+  { id: 'deepseek', label: 'DeepSeek', color: '#5c8dff' },
+  { id: 'opencode', label: 'OpenCode', color: '#fffa00' },
+  { id: 'command-goat', label: 'Command Goat', color: '#ff9d00' }
 ];
 
 function lastDays(count) {

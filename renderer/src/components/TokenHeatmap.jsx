@@ -1,5 +1,5 @@
 // GitHub 风格 Token 活动热力图:每日(53×7)/每周(53 列 1 行)/累计(高度条)三模式。
-// 颜色用主题 primary(#74B8FC)的 5 档透明度;hover tooltip 显示日期与用量。
+// 颜色用主题 primary(#fffa00)的 5 档透明度;hover tooltip 显示日期与用量。
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { getHeatmap, onProvidersChanged } from '../api.js';
 import { buildWeeks, colorLevel, formatToken, isoWeekKey } from '../lib/heatmap.js';
@@ -227,8 +227,8 @@ export default function TokenHeatmap({ provider = 'all', year = new Date().getFu
                 width: CELL,
                 height: CELL,
                 background: cell && cell.inYear
-                  ? 'rgba(116,184,252,' + LEVEL_ALPHA[level] + ')'
-                  : 'rgba(0,0,0,0.04)'
+                  ? 'rgba(255,250,0,' + LEVEL_ALPHA[level] + ')'
+                  : 'rgba(255,255,255,0.05)'
               };
               return cell ? (
                 <div
@@ -261,7 +261,7 @@ export default function TokenHeatmap({ provider = 'all', year = new Date().getFu
               style={{
                 width: CELL + 6,
                 height: CELL + 6,
-                background: 'rgba(116,184,252,' + LEVEL_ALPHA[level] + ')'
+                background: 'rgba(255,250,0,' + LEVEL_ALPHA[level] + ')'
               }}
               onMouseEnter={(e) => showTip(e, date)}
               onMouseMove={moveTip} onMouseLeave={hideTip}
@@ -284,7 +284,7 @@ export default function TokenHeatmap({ provider = 'all', year = new Date().getFu
             <div
               key={c}
               className="heatmap-cum-bar"
-              style={{ height: height, background: 'rgba(116,184,252,0.55)' }}
+              style={{ height: height, background: 'rgba(255,250,0,0.55)' }}
               onMouseEnter={(e) => showTip(e, date, cum > 0 ? [{ label: '累计消耗', value: formatToken(cum) + ' Token' }] : null)}
               onMouseMove={moveTip} onMouseLeave={hideTip}
             />
@@ -346,7 +346,7 @@ export default function TokenHeatmap({ provider = 'all', year = new Date().getFu
       <div className="heatmap-legend">
         <span>少</span>
         {[0, 1, 2, 3, 4].map((l) => (
-          <span key={l} className="heatmap-legend-cell" style={{ background: 'rgba(116,184,252,' + LEVEL_ALPHA[l] + ')' }} />
+          <span key={l} className="heatmap-legend-cell" style={{ background: 'rgba(255,250,0,' + LEVEL_ALPHA[l] + ')' }} />
         ))}
         <span>多</span>
       </div>

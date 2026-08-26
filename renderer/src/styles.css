@@ -94,11 +94,11 @@ body,
   background: transparent;
 }
 .content::-webkit-scrollbar-thumb {
-  background: rgba(124, 231, 255, 0.18);
+  background: rgba(255, 250, 0, 0.18);
   border-radius: 4px;
 }
 .content::-webkit-scrollbar-thumb:hover {
-  background: rgba(124, 231, 255, 0.3);
+  background: rgba(255, 250, 0, 0.3);
 }
 .content::-webkit-scrollbar-button {
   display: none;
@@ -147,7 +147,7 @@ body,
 }
 
 .titlebar-btn:hover {
-  background: rgba(124, 231, 255, 0.08);
+  background: rgba(255, 250, 0, 0.08);
   color: var(--text-primary);
 }
 
@@ -158,14 +158,14 @@ body,
 
 /* 布局编辑激活态:实心主题色 + 白图标,明确区分"编排中" */
 .titlebar-btn-layout.active {
-  background: var(--primary, #74b8fc);
-  color: #fff;
-  box-shadow: 0 1px 6px rgba(116, 184, 252, 0.55);
+  background: var(--primary);
+  color: #101012;
+  box-shadow: 0 0 8px rgba(255, 250, 0, 0.5);
 }
 
 .titlebar-btn-layout.active:hover {
-  background: var(--primary-dark, #5a9fe0);
-  color: #fff;
+  background: var(--primary-dark);
+  color: #101012;
 }
 
 /* 点击小动画:刷新转一整圈,设置齿轮轻转回弹 */
@@ -218,32 +218,34 @@ body,
 /* ======== 透明窗口时代遗留:非透明窗口 + DWM 圆角后不再需要在拖动时切直角 ======== */
 
 /* ======== 终末地(Arknights: Endfield)风格主题 ========
-   近黑底 + 荧光青主色 + 琥珀橙高亮,工业 HUD 面板感 */
+   官网提取:近黑底 + 荧光黄主强调 + 荧光绿次级 + 荧光粉点缀,
+   斜切角 + 45°斜纹 + 发光描边,工业 HUD 面板感 */
 :root {
-  --primary: #7CE7FF;
-  --primary-light: #A9F1FF;
-  --primary-dark: #3FB8D8;
-  --accent: #FFB03A;
-  --bg-window: rgba(11, 14, 18, 0.94);
-  --bg-window-dark: rgba(7, 9, 12, 0.96);
-  --bg-card: #131A21;
-  --bg-card-dark: #0D1218;
-  --bg-elevated: #1A232C;
-  --text-primary: #E2ECF2;
-  --text-secondary: #8494A3;
-  --text-inverse: #0B0E12;
-  --border: #22313D;
-  --border-dark: #1A2731;
-  --border-glow: rgba(124, 231, 255, 0.35);
-  --success: #4ADE80;
-  --warning: #FFB03A;
-  --error: #FF5C5C;
-  --radius-window: 10px;
-  --radius-card: 8px;
-  --radius-btn: 6px;
-  --radius-input: 6px;
-  --shadow-window: 0 0 0 1px rgba(124, 231, 255, 0.12), 0 6px 28px rgba(0, 0, 0, 0.6);
-  --shadow-card: 0 0 0 1px rgba(124, 231, 255, 0.08), 0 2px 10px rgba(0, 0, 0, 0.45);
+  --primary: #fffa00;
+  --primary-light: #ffff6b;
+  --primary-dark: #d4d000;
+  --accent-green: #00ffa2;
+  --accent-pink: #ff1aac;
+  --bg-window: rgba(15, 15, 17, 0.94);
+  --bg-window-dark: rgba(10, 10, 12, 0.96);
+  --bg-card: #1f1f22;
+  --bg-card-dark: #17171a;
+  --bg-elevated: #2a2a2e;
+  --text-primary: #e5e5e5;
+  --text-secondary: #9a9a9a;
+  --text-inverse: #101012;
+  --border: #35373c;
+  --border-dark: #2b2d31;
+  --border-glow: rgba(255, 250, 0, 0.4);
+  --success: #00ffa2;
+  --warning: #fffa00;
+  --error: #ff5c6c;
+  --radius-window: 6px;
+  --radius-card: 4px;
+  --radius-btn: 3px;
+  --radius-input: 3px;
+  --shadow-window: 0 0 0 1px rgba(255, 250, 0, 0.15), 0 6px 28px rgba(0, 0, 0, 0.7);
+  --shadow-card: 0 0 0 1px rgba(255, 250, 0, 0.1), 0 2px 10px rgba(0, 0, 0, 0.5);
 }
 
 /* 主窗口恒为终末地暗色;body.dark 标记供图表主题读取 */
@@ -280,22 +282,22 @@ body.dark {
   top: 0;
   left: 0;
   right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, var(--primary), transparent 70%);
-  opacity: 0.6;
+  height: 2px;
+  background: linear-gradient(90deg, var(--primary) 0%, var(--accent-green) 50%, var(--accent-pink) 100%);
+  opacity: 0.55;
   pointer-events: none;
 }
 
+/* 终末地斜切角标:左上角黄色斜切三角 */
 .component-surface::after {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
-  width: 10px;
-  height: 10px;
-  border-top: 1px solid var(--primary);
-  border-left: 1px solid var(--primary);
-  opacity: 0.5;
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(135deg, var(--primary) 50%, transparent 50%);
+  opacity: 0.6;
   pointer-events: none;
 }
 
@@ -309,7 +311,7 @@ body.dark {
 
 .fee-card-surface {
   /* 渐变叠加在实色卡片底上,避免窗口半透明时透出底色、与其他卡片风格不一致 */
-  background: linear-gradient(135deg, rgba(124, 231, 255, 0.05), rgba(124, 231, 255, 0.02)), var(--bg-card);
+  background: linear-gradient(135deg, rgba(255, 250, 0, 0.06), rgba(255, 250, 0, 0.03)), var(--bg-card);
   transition: all 200ms ease-out;
   cursor: default;
 }
@@ -317,7 +319,7 @@ body.dark {
 .fee-card-surface:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-card);
-  background: linear-gradient(135deg, rgba(124, 231, 255, 0.09), rgba(124, 231, 255, 0.03)), var(--bg-card);
+  background: linear-gradient(135deg, rgba(255, 250, 0, 0.1), rgba(255, 250, 0, 0.04)), var(--bg-card);
 }
 
 .fee-card-content {
@@ -411,8 +413,8 @@ body.dark {
   width: 56px;
   height: 12px;
   border-radius: 999px;
-  background: rgba(124, 231, 255, 0.16);
-  border: 1px solid rgba(124, 231, 255, 0.4);
+  background: rgba(255, 250, 0, 0.15);
+  border: 1px solid rgba(255, 250, 0, 0.38);
   cursor: grab;
   /* 必须压过 gridstack 缩放手柄的 z-index:100,否则拖拽柄被 n 手柄盖住点不到 */
   z-index: 110;
@@ -535,7 +537,7 @@ body.dark {
 
 .quota-bar {
   height: 6px;
-  background: rgba(124, 231, 255, 0.12);
+  background: rgba(255, 250, 0, 0.12);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -629,7 +631,7 @@ body.dark {
 }
 
 .heatmap-tab.active {
-  background: rgba(124, 231, 255, 0.14);
+  background: rgba(255, 250, 0, 0.13);
   color: var(--primary);
   font-weight: 600;
 }
