@@ -12,6 +12,12 @@ const DEFAULT_DB_PATH = () => path.join(os.homedir(), '.local', 'share', 'openco
 const MATCH = /\.json$/;
 const CURSOR_KEY = 'localLogCursors.opencode';
 
+// 已有独立平台监控的 provider:这些用量由对应平台卡片统计(command-goat),
+// opencode 本地统计应排除,避免同源用量被重复计数。
+// 注意:opencode-go / deepseek 暂不排除(它们各自没有独立的每日 token 图表,
+// 用户习惯在 opencode 里看;且它们不属于 cmd 套餐)。
+const EXCLUDED_PROVIDERS = new Set(['command-code', 'commandcode']);
+
 // 解析单条消息(data 为消息对象),仅统计已完成的 assistant 消息。
 // 字段语义对照 opencode src/session/session.ts updateCostAndTokens:
 //   input  = tokens.input(已扣除缓存读写)
@@ -20,6 +26,8 @@ const CURSOR_KEY = 'localLogCursors.opencode';
 //   total  = tokens.total(含缓存读取)或 input + cached + output
 function parseMessageData(data, fallbackId) {
   if (!data || data.role !== 'assistant') return null;
+  const providerID = data.providerID || (data.model && data.model.providerID) || null;
+  if (providerID && EXCLUDED_PROVIDERS.has(providerID)) return null;
   const completed = data.time && data.time.completed;
   if (!completed || !data.tokens) return null;
   const tokens = data.tokens || {};

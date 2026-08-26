@@ -52,6 +52,29 @@ test('parseMessageFile maps opencode tokens including reasoning into output', ()
   assert.equal(rec.usage.total, 12828 + 500 + 98 + 32);
 });
 
+test('parseMessageData excludes providers tracked by other platform cards (command-code)', () => {
+  // cmd 套餐在 opencode 里使用,由 command-goat 卡片单独统计,不应再计入 opencode
+  const cmdMsg = makeMessage({
+    id: undefined,
+    providerID: 'command-code',
+    modelID: 'deepseek/deepseek-v4-flash'
+  });
+  assert.equal(parseMessageData(cmdMsg, 'msg_cmd1'), null);
+
+  const cmd2 = makeMessage({
+    id: undefined,
+    providerID: 'commandcode',
+    modelID: 'deepseek/deepseek-v4-flash'
+  });
+  assert.equal(parseMessageData(cmd2, 'msg_cmd2'), null);
+
+  // 其他 provider(opencode-go / deepseek)仍计入 opencode 本地统计
+  const go = parseMessageData(makeMessage({ id: undefined, providerID: 'opencode-go' }), 'msg_go');
+  assert.ok(go);
+  const ds = parseMessageData(makeMessage({ id: undefined, providerID: 'deepseek' }), 'msg_ds');
+  assert.ok(ds);
+});
+
 test('parseMessageData handles the SQLite data field (tokens.total present, id separate)', () => {
   const row = {
     id: 'msg_sq1',
