@@ -175,7 +175,7 @@ function mergeOpenCodeDaily(store, records) {
   store.set('usageDaily', usageDaily);
 }
 
-// SQLite 主路径:全量读取 message 表并重算 opencode 每日聚合(覆盖旧键,避免重复计数)。
+// 全量重算 opencode 每日聚合(覆盖旧键,避免重复计数)。
 // 返回 records;打不开 DB 返回 null(调用方回退 JSON)。
 function readLocalLogFromDb(store, dbPath) {
   let DatabaseSync = null;
@@ -282,6 +282,52 @@ function getStats(ctx) {
   return { today: today, total: total };
 }
 
+// 读取 opencode.db 里 command-code/commandcode 消息的每日聚合。
+// 用户在 opencode 里用 cmd 套餐,消息都在这里(按天精确);command-goat 卡片用它做每日 token 统计,
+// 不再依赖网页上被四舍五入的月度总量。
+function readCommandCodeDaily(dbPath) {
+  let DatabaseSync = null;
+  try {
+    DatabaseSync = require('node:sqlite').DatabaseSync;
+  } catch (e) {
+    return {};
+  }
+  let db;
+  try {
+    db = new DatabaseSync(dbPath, { readOnly: true });
+  } catch (e) {
+    return {};
+  }
+  try {
+    const rows = db.prepare('SELECT time_created, data FROM message').all();
+    const out = {};
+    rows.forEach((row) => {
+      let data;
+      try { data = JSON.parse(row.data); } catch (e) { data = null; }
+      if (!data || data.role !== 'assistant') return;
+      const pid = data.providerID || (data.model && data.model.providerID) || null;
+      if (pid !== 'command-code' && pid !== 'commandcode') return;
+      const completed = data.time && data.time.completed;
+      if (!completed || !data.tokens) return;
+      const tokens = data.tokens;
+      const cache = tokens.cache || {};
+      const total = Number(tokens.total)
+        || ((Number(tokens.input) || 0) + (Number(cache.read) || 0) + (Number(tokens.output) || 0) + (Number(tokens.reasoning) || 0));
+      const day = localDayStr(Number(completed));
+      const e = out[day] || { total: 0, cost: 0, messages: 0 };
+      e.total += total;
+      e.cost += Number(data.cost) || 0;
+      e.messages += 1;
+      out[day] = e;
+    });
+    return out;
+  } catch (e) {
+    return {};
+  } finally {
+    try { db.close(); } catch (e) {}
+  }
+}
+
 module.exports = {
   parseMessageData,
   parseMessageFile,
@@ -290,6 +336,7 @@ module.exports = {
   mergeModelArrays,
   readLocalLog,
   readLocalLogFromDb,
+  readCommandCodeDaily,
   getStats,
   DEFAULT_ROOT,
   DEFAULT_DB_PATH,

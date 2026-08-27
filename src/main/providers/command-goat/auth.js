@@ -1,7 +1,7 @@
 // Command Goat Studio 会话:弹窗登录 commandcode.ai,抓取 Studio 顶部用量仪表 DOM。
 // 会话 cookie 由持久化 partition('persist:commandcode-studio')保存;轮询用隐藏窗口 + 缓存。
 const { BrowserWindow } = require('electron');
-const { parseScrapedUsage, parseScrapedStats, CRED_KEY } = require('./quota');
+const { parseScrapedUsage, CRED_KEY } = require('./quota');
 const { localDayStr } = require('../../core/locallog');
 
 const STUDIO_URL = 'https://commandcode.ai/studio/';
@@ -42,75 +42,46 @@ function writeCred(store, cred) {
   if (store) store.set(CRED_KEY, cred);
 }
 
-const LAST_TOTAL_KEY = 'providers.command-goat.lastTotal';
-const LAST_COST_KEY = 'providers.command-goat.lastCost';
-const LAST_RUNS_KEY = 'providers.command-goat.lastRuns';
-const HISTORY_RESTORED_KEY = 'providers.command-goat.historyRestored';
-
+// 每日 token 统计改用 opencode.db 里 command-code/commandcode 消息的精确按日数据:
+// 用户在 opencode 里用 cmd 套餐,消息都在本地 DB,网页只显示四舍五入的月度总量(如 1.1B),
+// 用它算增量会在单日增量不足以改变显示值时永远是 0。
 function saveStats(store, items, tag) {
   if (!store) return;
-  const stats = parseScrapedStats(items);
-  store.set(STATS_KEY, stats);
 
-  const today = localDayStr(Date.now());
+  const opencodeLocallog = require('../opencode/locallog');
+  const dbPath = (store.get('providers.opencode.dbPath')) || opencodeLocallog.DEFAULT_DB_PATH();
+  const daily = opencodeLocallog.readCommandCodeDaily(dbPath);
+
   const usageDaily = store.get('usageDaily') || {};
-
-  // 一次性恢复历史:修复前的月度累计曾经被清掉,这里把它重新记到"昨天"。
-  // 历史部分 = 当前月度总量 - 今天已累计的增量;只执行一次,不影响后续。
-  if (!store.get(HISTORY_RESTORED_KEY)) {
-    const prevDay = localDayStr(Date.now() - 86400000);
-    if (!usageDaily['command-goat:' + prevDay]) {
-      const todayEntry = usageDaily['command-goat:' + today] || { total: 0 };
-      const historical = Math.max(0, Math.round(stats.tokens - (Number(todayEntry.total) || 0)));
-      if (historical > 0) {
-        usageDaily['command-goat:' + prevDay] = {
-          input: 0,
-          cached: 0,
-          output: historical,
-          total: historical,
-          cost: 0,
-          messages: 0,
-          models: []
-        };
-      }
+  // 全量重算 command-goat 每日键(覆盖旧数据,避免舍入增量残留)
+  Object.keys(usageDaily).forEach((k) => {
+    if (k.indexOf('command-goat:') === 0) delete usageDaily[k];
+  });
+  let monthTokens = 0;
+  let monthCost = 0;
+  let monthRuns = 0;
+  const monthPrefix = localDayStr(Date.now()).slice(0, 7);
+  Object.keys(daily).forEach((date) => {
+    const d = daily[date];
+    usageDaily['command-goat:' + date] = {
+      input: 0,
+      cached: 0,
+      output: d.total,
+      total: d.total,
+      cost: d.cost,
+      messages: d.messages,
+      models: []
+    };
+    if (date.indexOf(monthPrefix) === 0) {
+      monthTokens += d.total;
+      monthCost += d.cost;
+      monthRuns += d.messages;
     }
-    store.set(HISTORY_RESTORED_KEY, true);
-  }
-
-  // Studio 只有月度总量,无每日明细。每日消耗 = 两次抓取之间的增量(当前月度总量 - 上次月度总量),
-  // 累加到当天;月度重置(总量变小)时重新建立基线。
-  const prevTotal = Number(store.get(LAST_TOTAL_KEY)) || 0;
-  const prevCost = Number(store.get(LAST_COST_KEY)) || 0;
-  const prevRuns = Number(store.get(LAST_RUNS_KEY)) || 0;
-
-  let delta = 0;
-  if (prevTotal > 0 && stats.tokens >= prevTotal) delta = stats.tokens - prevTotal;
-  let deltaCost = 0;
-  if (prevCost > 0 && stats.cost >= prevCost) deltaCost = Math.round((stats.cost - prevCost) * 10000) / 10000;
-  let deltaRuns = 0;
-  // 单日运行增量不能超过月度总量;超了说明解析到无关数字,视为 0
-  if (prevRuns > 0 && stats.runs >= prevRuns && stats.runs - prevRuns <= stats.runs) {
-    deltaRuns = stats.runs - prevRuns;
-  }
-
-  store.set(LAST_TOTAL_KEY, stats.tokens);
-  store.set(LAST_COST_KEY, stats.cost);
-  store.set(LAST_RUNS_KEY, stats.runs);
-
-  const prevEntry = usageDaily['command-goat:' + today] || { input: 0, cached: 0, output: 0, total: 0, cost: 0, messages: 0, models: [] };
-  // 旧版本遗留的错误运行数(远超月度总量)→ 清零
-  const prevMessages = Number(prevEntry.messages) || 0;
-  const messages = prevMessages > stats.runs * 10 ? 0 : prevMessages + deltaRuns;
-  usageDaily['command-goat:' + today] = {
-    input: 0,
-    cached: 0,
-    output: prevEntry.output + delta,
-    total: prevEntry.total + delta,
-    cost: (prevEntry.cost || 0) + deltaCost,
-    messages: messages,
-    models: []
-  };
+  });
   store.set('usageDaily', usageDaily);
+  // 使用卡片(本月 Token/费用/运行)也从本地精确数据取
+  store.set(STATS_KEY, { tokens: monthTokens, cost: monthCost, runs: monthRuns });
+
   writeDebugDump(store, items, tag);
 }
 

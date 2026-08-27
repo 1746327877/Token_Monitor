@@ -207,57 +207,53 @@ test('parseScrapedStats estimates cost from the monthly percent when no dollar a
   assert.equal(stats.cost, Math.round(70 * 0.34 * 100) / 100); // $23.8
 });
 
-test('saveStats accumulates daily deltas so idle days stay at zero', () => {
-  const store = makeStore();
+test('saveStats fills command-goat daily usage from opencode.db commandcode messages', () => {
+  const os = require('os');
+  const path = require('path');
+  const fs = require('fs');
+  const { DatabaseSync } = require('node:sqlite');
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsm-goat-db-'));
+  const dbPath = path.join(dir, 'opencode.db');
+  const db = new DatabaseSync(dbPath);
+  db.exec('CREATE TABLE message (id text PRIMARY KEY, session_id text, time_created integer, time_updated integer, data text)');
+
   const today = localDayStr(Date.now());
-
-  const mk = (tokens, cost, runs) => [
-    'MONTHLY USAGE $' + cost + ' of $70 used this month',
-    'TOTAL TOKENS ' + tokens + ' tokens',
-    'TOTAL RUNS ' + runs + ' runs'
-  ];
-
-  // 首次抓取:当天从 0 开始,只建基线
-  saveStats(store, mk(330700000, 8.1, 844));
-  assert.equal(store.get('usageDaily')['command-goat:' + today].total, 0);
-
-  // 又用了 100 万:delta 累加到当天
-  saveStats(store, mk(331700000, 8.13, 847));
-  assert.equal(store.get('usageDaily')['command-goat:' + today].total, 1000000);
-  assert.equal(store.get('usageDaily')['command-goat:' + today].cost, 0.03);
-  assert.equal(store.get('usageDaily')['command-goat:' + today].messages, 3);
-
-  // 今天没干活:总量不变 → delta=0 → 当天仍是 100 万,不变成整月累计
-  saveStats(store, mk(331700000, 8.13, 847));
-  assert.equal(store.get('usageDaily')['command-goat:' + today].total, 1000000);
-
-  // 月度重置(总量变小):重新建基线,当天保持(不叠加负数)
-  saveStats(store, mk(500000, 0.1, 10));
-  assert.equal(store.get('usageDaily')['command-goat:' + today].total, 1000000);
-});
-
-test('saveStats restores pre-fix history into the previous day once', () => {
-  const store = makeStore();
-  const today = localDayStr(Date.now());
-  const prevDay = localDayStr(Date.now() - 86400000);
-
-  // 模拟:今天已有真实增量(200 万),月度总量 349.6M → 历史部分 ≈ 347.6M 应记到昨天
-  store.set('usageDaily', {
-    ['command-goat:' + today]: { total: 2000000, output: 2000000 }
+  const prev = localDayStr(Date.now() - 86400000);
+  const msg = (completed, pid, input, output, reason, cacheRead, cost) => JSON.stringify({
+    role: 'assistant',
+    providerID: pid,
+    modelID: 'deepseek/deepseek-v4-flash',
+    cost,
+    tokens: { input, output, reasoning: reason, cache: { read: cacheRead, write: 0 } },
+    time: { created: completed, completed }
   });
-  store.set('providers.command-goat.lastTotal', 349600000);
-  store.set('providers.command-goat.lastCost', 8.94);
-  store.set('providers.command-goat.lastRuns', 936);
+  const ins = db.prepare('INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, ?, ?)');
+  const dayMs = 86400000;
+  ins.run('m1', 's', Date.now(), Date.now(), msg(Date.now(), 'commandcode', 100, 50, 10, 200, 0.01));
+  ins.run('m2', 's', Date.now(), Date.now(), msg(Date.now(), 'command-code', 300, 60, 20, 400, 0.02));
+  ins.run('m3', 's', Date.now() - dayMs, Date.now(), msg(Date.now() - dayMs, 'commandcode', 1000, 100, 0, 500, 0.05));
+  // 非 cmd provider 不得计入
+  ins.run('m4', 's', Date.now(), Date.now(), msg(Date.now(), 'opencode-go', 999, 999, 0, 0, 9));
+  db.close();
 
-  saveStats(store, ['MONTHLY USAGE $8.94 of $70 used this month', 'TOTAL TOKENS 349.6M tokens', 'TOTAL RUNS 936 runs']);
+  const store = makeStore();
+  store.set('providers.opencode.dbPath', dbPath);
+  saveStats(store, ['x']);
+  saveStats(store, ['y']); // 全量重算,不重复累加
 
   const ud = store.get('usageDaily');
-  // 历史(月度累计 - 今天增量)记到昨天,一次性
-  assert.equal(ud['command-goat:' + prevDay].total, 349600000 - 2000000);
-  // 今天继续按增量累加(本次没增量 → 保持 200 万)
-  assert.equal(ud['command-goat:' + today].total, 2000000);
+  // 今天:两条 cmd 消息合计 input100+300 + cached200+400 + output50+60 + reason10+20 = 1140
+  assert.equal(ud['command-goat:' + today].total, 1140);
+  assert.equal(ud['command-goat:' + today].cost, 0.01 + 0.02);
+  assert.equal(ud['command-goat:' + today].messages, 2);
+  // 昨天:1000+100+500 = 1600
+  assert.equal(ud['command-goat:' + prev].total, 1600);
+  // opencode-go 消息不计入 command-goat
+  assert.ok(!Object.keys(ud).some((k) => k.indexOf('command-goat') === 0 && ud[k].total > 2000));
+  // 本月统计 = 今天(昨天若跨月不计,此处同月则两笔都算)
+  const stats = store.get('providers.command-goat.stats');
+  assert.ok(stats.tokens >= 1140);
 
-  // 第二次保存不再重复写昨天
-  saveStats(store, ['MONTHLY USAGE $8.94 of $70 used this month', 'TOTAL TOKENS 349.6M tokens', 'TOTAL RUNS 936 runs']);
-  assert.equal(store.get('usageDaily')['command-goat:' + prevDay].total, 349600000 - 2000000);
+  fs.rmSync(dir, { recursive: true, force: true });
 });
