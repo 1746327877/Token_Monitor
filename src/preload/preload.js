@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('api', {
       'login:submit',
       'login:opencode-go',
       'login:command-goat',
+      'login:command-goat:2',
       'provider:reauth',
       'window:minimize',
       'window:toggle-always-on-top',
@@ -53,6 +54,7 @@ contextBridge.exposeInMainWorld('api', {
       'get:heatmap',
       'get:opencode-stats',
       'get:command-goat-stats',
+      'get:command-goat-accounts',
       'get:bounds',
       'get:session-state',
       'window:commit'

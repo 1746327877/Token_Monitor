@@ -50,3 +50,22 @@ test('WindowBar consumes used/limit/remaining/resetsAt and colors by remaining p
   assert.match(windowBar, /20/);
   assert.match(windowBar, /empty/);
 });
+
+test('QuotaCard renders a view selector for Command Goat dual accounts', () => {
+  // 下拉切换:全部 / 号1 / 号2
+  assert.match(quotaCard, /quota-view-select/);
+  assert.match(quotaCard, /value="all">全部/);
+  assert.match(quotaCard, /accounts\.map/);
+  // 每个号分块渲染并标注号名
+  assert.match(quotaCard, /quota-group/);
+  assert.match(quotaCard, /QuotaGroup/);
+  // 兼容旧单号形态与新的 { accounts } 多号形态
+  assert.match(quotaCard, /normalizeAccounts/);
+});
+
+test('QuotaCard normalizes legacy single-account and multi-account shapes', () => {
+  // 静态源码应同时处理 windows(旧) 与 accounts(新) 两种数据形态
+  assert.match(quotaCard, /accounts/);
+  assert.match(quotaCard, /windows/);
+  assert.match(quotaCard, /Array\.isArray\(quotaState\.accounts\)/);
+});

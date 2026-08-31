@@ -1,5 +1,6 @@
 // Command Goat Studio 会话:弹窗登录 commandcode.ai,抓取 Studio 顶部用量仪表 DOM。
-// 会话 cookie 由持久化 partition('persist:commandcode-studio')保存;轮询用隐藏窗口 + 缓存。
+// 支持双号:每个号独立 partition(cookie 会话)+ 独立 store 键,登录/抓取/展示互不干扰。
+// 号1 沿用旧键/旧 partition,已登录的现有号自动成为号1。
 const { BrowserWindow } = require('electron');
 const { parseScrapedUsage, CRED_KEY } = require('./quota');
 const { localDayStr } = require('../../core/locallog');
@@ -9,19 +10,30 @@ const USAGE_URL = 'https://commandcode.ai/usage';
 const PARTITION = 'persist:commandcode-studio';
 const CACHE_MS = 3 * 60 * 1000;
 const STATS_KEY = 'providers.command-goat.stats';
+// 双号配置:号1 用旧 partition/key(向后兼容),号2 加后缀
+const SLOTS = ['1', '2'];
+const SLOT_CONFIG = {
+  '1': { partition: PARTITION, credKey: CRED_KEY, quotaKey: 'providers.command-goat.quota.1' },
+  '2': { partition: 'persist:commandcode-studio-2', credKey: 'providers.command-goat.session.2', quotaKey: 'providers.command-goat.quota.2' }
+};
 
-let cachedQuota = null;
-let cachedAt = 0;
+// 各号独立缓存:slot → { quota, at }
+const cacheBySlot = {};
 
-function windowOptions(extra) {
+function slotConfig(slot) {
+  return SLOT_CONFIG[slot] || SLOT_CONFIG['1'];
+}
+
+function windowOptions(extra, slot) {
+  const cfg = slotConfig(slot);
   return Object.assign({
     width: 1000,
     height: 720,
     show: true,
     center: true,
-    title: '登录 Command Code Studio',
+    title: '登录 Command Code Studio' + (slot && slot !== '1' ? ' 号' + slot : ''),
     webPreferences: {
-      partition: PARTITION,
+      partition: cfg.partition,
       contextIsolation: true,
       nodeIntegration: false,
       // 隐藏轮询窗口必须关掉后台节流,否则 SPA 渲染/定时器被暂停,抓不到数据
@@ -30,16 +42,48 @@ function windowOptions(extra) {
   }, extra || {});
 }
 
-function createSessionWindow() {
-  return new BrowserWindow(windowOptions());
+function createSessionWindow(slot) {
+  return new BrowserWindow(windowOptions({}, slot));
 }
 
-function readCred(store) {
-  return (store && store.get(CRED_KEY)) || null;
+function readCred(store, slot) {
+  const key = slotConfig(slot).credKey;
+  return (store && store.get(key)) || null;
 }
 
-function writeCred(store, cred) {
-  if (store) store.set(CRED_KEY, cred);
+function writeCred(store, slot, cred) {
+  if (store) store.set(slotConfig(slot).credKey, cred);
+}
+
+// 已登录的号列表:{ slot, name, capturedAt }[];号1 有旧 session 也计入。
+function listAccounts(store) {
+  const out = [];
+  SLOTS.forEach((slot) => {
+    const cred = readCred(store, slot);
+    if (cred && cred.capturedAt) {
+      out.push({ slot: slot, name: (slot === '1' ? '号1' : '号2'), capturedAt: cred.capturedAt });
+    }
+  });
+  return out;
+}
+
+function readQuotaCache(store, slot) {
+  const cfg = slotConfig(slot);
+  return (store && store.get(cfg.quotaKey)) || null;
+}
+
+function writeQuotaCache(store, slot, quota) {
+  if (store) store.set(slotConfig(slot).quotaKey, quota);
+}
+
+function clearQuotaCache(store, slot) {
+  if (store) {
+    const cfg = slotConfig(slot);
+    store.set(cfg.quotaKey, null);
+  }
+  if (cacheBySlot[slot]) {
+    cacheBySlot[slot] = null;
+  }
 }
 
 // 每日 token 统计改用 opencode.db 里 command-code/commandcode 消息的精确按日数据:
@@ -187,27 +231,28 @@ async function waitForUsage(win, timeoutMs) {
 }
 
 // 登录捕获:可见窗口打开 Studio,用户登录后抓取用量仪表。成功 resolve QuotaState 并写 store。
-function captureSession(ctx) {
+// slot 指定登录哪个号('1'/'2');不传默认 '1'。
+function captureSession(ctx, slot) {
   const logger = (ctx && ctx.logger) || console;
+  const targetSlot = slot || '1';
   return new Promise((resolve, reject) => {
     const win = (ctx && typeof ctx.createSessionWindow === 'function')
-      ? ctx.createSessionWindow()
-      : createSessionWindow();
+      ? ctx.createSessionWindow(targetSlot)
+      : createSessionWindow(targetSlot);
     let settled = false;
 
     const finish = (quota) => {
       if (settled) return;
       settled = true;
-      cachedQuota = quota;
-      cachedAt = Date.now();
-      writeCred(ctx && ctx.store, { capturedAt: Date.now() });
+      writeQuotaCache(ctx && ctx.store, targetSlot, quota);
+      writeCred(ctx && ctx.store, targetSlot, { capturedAt: Date.now() });
       try { win.close(); } catch (e) {}
       resolve(quota);
     };
     const fail = (err) => {
       if (settled) return;
       settled = true;
-      logger.error('[command-goat] capture failed:', err && err.message ? err.message : err);
+      logger.error('[command-goat] capture failed (slot ' + targetSlot + '):', err && err.message ? err.message : err);
       try { win.close(); } catch (e) {}
       reject(err);
     };
@@ -218,11 +263,11 @@ function captureSession(ctx) {
       if (settled) return;
       const quota = result ? parseScrapedUsage(result.items) : null;
       if (!quota) {
-        logger.log('[command-goat] no usage meters found; page:', JSON.stringify(result));
+        logger.log('[command-goat] no usage meters found (slot ' + targetSlot + '); page:', JSON.stringify(result));
         fail(new Error('未在用量页面找到额度数据(请确认已登录 GOAT 套餐)'));
         return;
       }
-      logger.log('[command-goat] captured usage from DOM, windows:', quota.windows.map((w) => w.kind).join(','));
+      logger.log('[command-goat] captured usage from DOM (slot ' + targetSlot + '), windows:', quota.windows.map((w) => w.kind).join(','));
       saveStats(ctx && ctx.store, result.items, 'usage');
       // 2) studio 概览页:月度 tokens/runs 统计
       try {
@@ -261,21 +306,22 @@ function captureSession(ctx) {
       if (!settled) fail(new Error('未捕获到 Command Goat 用量数据(请登录后打开 Studio)'));
     });
 
-    logger.log('[command-goat] capture session start ->', USAGE_URL);
+    logger.log('[command-goat] capture session start (slot ' + targetSlot + ') ->', USAGE_URL);
     win.loadURL(USAGE_URL);
   });
 }
 
-// 轮询:3 分钟缓存 + 隐藏窗口抓取(usage 页取窗口,studio 页取统计)。
-// 抓取失败时回退到最近一次成功缓存,绝不让卡片清空。
-async function fetchQuota(ctx) {
+// 抓取单个号的额度(usage 页取窗口,studio 页取统计)。
+// 抓取失败时回退到 store 里最近一次成功缓存,绝不让卡片清空。
+async function fetchQuotaForSlot(ctx, slot) {
   const store = ctx && ctx.store;
   const logger = (ctx && ctx.logger) || console;
-  const cred = readCred(store);
+  const cached = readQuotaCache(store, slot);
+  const cred = readCred(store, slot);
   if (!cred) return null;
   const now = Date.now();
-  if (cachedQuota && now - cachedAt < CACHE_MS) return cachedQuota;
-  const win = new BrowserWindow(windowOptions({ show: false }));
+  if (cached && now - cached.fetchedAt < CACHE_MS) return cached;
+  const win = new BrowserWindow(windowOptions({ show: false }, slot));
   try {
     // 1) usage 页:5小时/每周/每月窗口
     await win.loadURL(USAGE_URL);
@@ -285,21 +331,22 @@ async function fetchQuota(ctx) {
       const url = result && result.url ? result.url : '';
       const title = result && result.title ? result.title : '';
       if (/signin|login|登录|sign in/i.test(url + ' ' + title)) {
-        logger.log('[command-goat] session expired (redirected to login)');
-        throw new Error('登录已过期，请重新登录');
+        logger.log('[command-goat] session expired (slot ' + slot + ', redirected to login)');
+        throw new Error('号' + slot + ' 登录已过期，请重新登录');
       }
-      logger.log('[command-goat] poll scrape empty; keeping cached quota');
-      return cachedQuota;
+      logger.log('[command-goat] poll scrape empty (slot ' + slot + '); keeping cached quota');
+      return cached;
     }
     // 统计保存与额度解析解耦:只要抓到页面就保存 tokens/每日增量,即使窗口解析失败
     saveStats(store, result.items, 'usage');
     const quota = parseScrapedUsage(result.items);
     if (!quota) {
-      logger.log('[command-goat] poll scrape unparsable; keeping cached quota (stats saved)');
-      return cachedQuota;
+      logger.log('[command-goat] poll scrape unparsable (slot ' + slot + '); keeping cached quota (stats saved)');
+      return cached;
     }
-    cachedQuota = quota;
-    cachedAt = Date.now();
+    quota.slot = slot;
+    quota.accountName = (slot === '1' ? '号1' : '号2');
+    writeQuotaCache(store, slot, quota);
     // 2) studio 概览页:月度 tokens/runs 统计
     try {
       await win.loadURL(STUDIO_URL);
@@ -312,11 +359,28 @@ async function fetchQuota(ctx) {
     }
     return quota;
   } catch (e) {
-    logger.log('[command-goat] poll error:', e && e.message ? e.message : e, '; keeping cached quota');
-    return cachedQuota;
+    logger.log('[command-goat] poll error (slot ' + slot + '):', e && e.message ? e.message : e, '; keeping cached quota');
+    return cached;
   } finally {
     try { win.destroy(); } catch (e) {}
   }
 }
 
-module.exports = { captureSession, createSessionWindow, fetchQuota, readCred, writeCred, getStats, saveStats, scrapeUsageScript, STUDIO_URL, USAGE_URL, PARTITION, STATS_KEY };
+// 轮询:抓取所有已登录号的额度,返回 { accounts: [{ slot, name, quota }] }。
+// 单个号失败不影响其他号。
+async function fetchQuota(ctx) {
+  const accounts = listAccounts(ctx && ctx.store);
+  const results = [];
+  for (const account of accounts) {
+    try {
+      const quota = await fetchQuotaForSlot(ctx, account.slot);
+      results.push({ slot: account.slot, name: account.name, capturedAt: account.capturedAt, quota: quota || readQuotaCache(ctx && ctx.store, account.slot) });
+    } catch (e) {
+      results.push({ slot: account.slot, name: account.name, capturedAt: account.capturedAt, quota: readQuotaCache(ctx && ctx.store, account.slot), error: e && e.message ? e.message : String(e) });
+    }
+  }
+  if (!results.length) return null;
+  return { accounts: results };
+}
+
+module.exports = { captureSession, createSessionWindow, fetchQuota, fetchQuotaForSlot, listAccounts, slotConfig, readCred, writeCred, getStats, saveStats, scrapeUsageScript, STUDIO_URL, USAGE_URL, PARTITION, STATS_KEY, SLOTS };

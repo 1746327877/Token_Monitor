@@ -718,6 +718,56 @@ body.dark {
   color: var(--text-secondary);
 }
 
+/* Command Goat 双号:下拉切换视图 */
+.quota-view-select {
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+.quota-view-select-input {
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  outline: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 200ms ease-out;
+}
+.quota-view-select-input:hover,
+.quota-view-select-input:focus {
+  border-color: var(--primary);
+}
+.quota-view-select-input:focus {
+  box-shadow: 0 0 0 2px rgba(255, 250, 0, 0.15);
+}
+
+/* 多号同时显示:每个号一个分块,组头标注号名 */
+.quota-group-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-green);
+  letter-spacing: 0.05em;
+  margin: 6px 0 4px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+  text-shadow: 0 0 8px rgba(0, 255, 162, 0.3);
+}
+.quota-group {
+  margin-bottom: 4px;
+}
+.quota-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.quota-group-name {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
 .quota-empty-text {
   color: var(--text-secondary);
 }

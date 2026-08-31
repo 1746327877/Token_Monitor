@@ -15,6 +15,7 @@
       '<div class="setting-row"><button class="btn btn-primary" id="sessionReloginBtn" style="width:100%;">登录平台获取用量</button></div>' +
       '<div class="setting-row"><button class="btn btn-secondary" id="goLoginBtn" style="width:100%;">登录 OpenCode Go 获取额度</button></div>' +
       '<div class="setting-row"><button class="btn btn-secondary" id="goatLoginBtn" style="width:100%;">登录 Command Goat 获取额度</button></div>' +
+      '<div class="setting-row"><button class="btn btn-secondary" id="goatLogin2Btn" style="width:100%;">登录 Command Goat 号2 获取额度</button></div>' +
       '</div>';
   }
 
@@ -111,6 +112,11 @@
     var goatLoginBtn = document.getElementById('goatLoginBtn');
     if (goatLoginBtn) {
       goatLoginBtn.addEventListener('click', function () { window.api.send('login:command-goat'); });
+    }
+
+    var goatLogin2Btn = document.getElementById('goatLogin2Btn');
+    if (goatLogin2Btn) {
+      goatLogin2Btn.addEventListener('click', function () { window.api.send('login:command-goat:2'); });
     }
 
     document.querySelectorAll('input[data-key]').forEach(function (el) {

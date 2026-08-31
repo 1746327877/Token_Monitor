@@ -133,15 +133,15 @@ module.exports = function setupIPC(deps) {
     }
   }
 
-  async function loginCommandGoat() {
+  async function loginCommandGoat(slot) {
     const provider = deps.registry.get('command-goat');
     if (!provider) return;
     try {
       await commandGoatAuth.captureSession({
         store: deps.store,
         logger: console,
-        createSessionWindow: () => sessionWindow('登录 Command Code Studio', commandGoatAuth.PARTITION)
-      });
+        createSessionWindow: (s) => sessionWindow('登录 Command Code Studio' + (s && s !== '1' ? ' 号' + s : ''), commandGoatAuth.slotConfig ? commandGoatAuth.slotConfig(s || '1').partition : commandGoatAuth.PARTITION)
+      }, slot || '1');
       if (deps.scheduler) deps.scheduler.poll('command-goat', 'quota');
     } catch (e) {
       console.error('[command-goat] login failed:', e && e.message ? e.message : e);
@@ -158,7 +158,25 @@ module.exports = function setupIPC(deps) {
   });
 
   ipcMain.on('login:command-goat', () => {
-    loginCommandGoat();
+    loginCommandGoat('1');
+  });
+
+  ipcMain.on('login:command-goat:2', () => {
+    loginCommandGoat('2');
+  });
+
+  // 返回各号登录状态与额度快照(下拉框数据源)
+  ipcMain.handle('get:command-goat-accounts', () => {
+    const provider = deps.registry.get('command-goat');
+    if (!provider || typeof provider.listAccounts !== 'function') {
+      return { accounts: [] };
+    }
+    const accounts = provider.listAccounts({ store: deps.store, logger: console }) || [];
+    return {
+      accounts: accounts.map((a) => Object.assign({}, a, {
+        quota: (deps.store && deps.store.get('providers.command-goat.quota.' + a.slot)) || null
+      }))
+    };
   });
 
   ipcMain.handle('get:command-goat-stats', () => {
