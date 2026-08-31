@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, nativeTheme } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeTheme, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const store = require('./store');
@@ -12,6 +12,7 @@ const opencodeGoProvider = require('./providers/opencode-go');
 const commandGoatProvider = require('./providers/command-goat');
 const { startScheduler } = require('./core/scheduler');
 const ccProxy = require('./core/cc-proxy');
+const { ensureWindowOnScreen } = require('./core/window-position');
 const setupIPC = require('./ipc');
 const { captureSession } = require('./providers/deepseek/session');
 
@@ -60,6 +61,17 @@ function getWinBounds() {
   };
 }
 
+// 启动时把窗口拉回当前屏幕内:外接显示器拔掉后,旧址可能整窗跑到屏幕外导致"窗口消失"。
+function safeMainBounds() {
+  const bounds = getWinBounds();
+  try {
+    const displays = screen.getAllDisplays();
+    return ensureWindowOnScreen(bounds, displays, 0.05);
+  } catch (e) {
+    return bounds;
+  }
+}
+
 function sendMainWindowBounds() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mainWindow.webContents.isDestroyed()) return;
@@ -84,7 +96,7 @@ function broadcastSessionState() {
 }
 
 function createMainWindow() {
-  const bounds = getWinBounds();
+  const bounds = safeMainBounds();
   mainWindow = new BrowserWindow({
     ...bounds,
     frame: false,
@@ -368,12 +380,13 @@ function normalizeMainBounds(bounds) {
     y = finite(bounds && bounds.y, current.y);
   }
 
-  return {
-    x: x,
-    y: y,
-    width: width,
-    height: height
-  };
+  var corrected = { x: x, y: y, width: width, height: height };
+  // 位置防护:即使跨屏拖动后保存,也要保证落在某块显示器内(可见面积≥5%)
+  try {
+    corrected = ensureWindowOnScreen(corrected, screen.getAllDisplays(), 0.05);
+  } catch (e) {}
+
+  return corrected;
 }
 
 /* ======== 设置窗口 ======== */
