@@ -57,6 +57,8 @@
       }
       case 'password':
         return '<input type="password" class="text-input" data-key="' + def.key + '" value="' + v + '"' + (placeholder ? ' placeholder="' + placeholder + '"' : '') + '>';
+      case 'text':
+        return '<input type="text" class="text-input" data-key="' + def.key + '" value="' + v + '"' + (placeholder ? ' placeholder="' + placeholder + '"' : '') + '>';
       default:
         return '';
     }
@@ -74,6 +76,12 @@
         groups[g].map(function (d) {
           var placeholder = '';
           if (d.key === 'apiKey' && settings.providers && settings.providers.deepseek && settings.providers.deepseek.apiKeySet) {
+            placeholder = '已保存,输入新 Key 以更换';
+          }
+          if (d.key === 'ccProxy.key1' && settings.ccProxy && settings.ccProxy.key1Set) {
+            placeholder = '已保存,输入新 Key 以更换';
+          }
+          if (d.key === 'ccProxy.key2' && settings.ccProxy && settings.ccProxy.key2Set) {
             placeholder = '已保存,输入新 Key 以更换';
           }
           return '<div class="setting-row' + (d.type === 'slider' ? ' vertical' : '') + '"><div><span class="setting-label">' + d.label + '</span></div>' + render(d, getNested(settings, d.key), placeholder) + '</div>';

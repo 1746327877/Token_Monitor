@@ -3,7 +3,9 @@
 
 const SECRET_SETTING_PATHS = [
   ['providers', 'deepseek', 'apiKey'],
-  ['providers', 'deepseek', 'sessionToken']
+  ['providers', 'deepseek', 'sessionToken'],
+  ['ccProxy', 'key1'],
+  ['ccProxy', 'key2']
 ];
 
 function sanitizeSettings(storeData) {
@@ -22,12 +24,17 @@ function sanitizeSettings(storeData) {
   if (clone.providers && clone.providers.deepseek) {
     clone.providers.deepseek.apiKeySet = !!(ds && ds.apiKey);
   }
+  const cp = storeData && storeData.ccProxy;
+  if (clone.ccProxy) {
+    clone.ccProxy.key1Set = !!(cp && cp.key1);
+    clone.ccProxy.key2Set = !!(cp && cp.key2);
+  }
   return clone;
 }
 
 // settings:update 的键白名单:渲染进程只能写这些设置,不能覆写凭证或其他内部键。
 const WRITABLE_SETTING_KEYS = new Set(['layout', 'componentOrder', 'providers.proxyUrl']);
-const WRITABLE_SETTING_PREFIXES = ['window.', 'components.', 'data.'];
+const WRITABLE_SETTING_PREFIXES = ['window.', 'components.', 'data.', 'ccProxy.'];
 
 // 遗留键别名:设置界面仍发送顶层 'apiKey',写入时映射到规范路径
 const WRITABLE_KEY_ALIASES = { apiKey: 'providers.deepseek.apiKey' };

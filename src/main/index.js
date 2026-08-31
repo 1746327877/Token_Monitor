@@ -11,6 +11,7 @@ const opencodeProvider = require('./providers/opencode');
 const opencodeGoProvider = require('./providers/opencode-go');
 const commandGoatProvider = require('./providers/command-goat');
 const { startScheduler } = require('./core/scheduler');
+const ccProxy = require('./core/cc-proxy');
 const setupIPC = require('./ipc');
 const { captureSession } = require('./providers/deepseek/session');
 
@@ -428,6 +429,14 @@ function applySetting(key, value) {
     case 'window.darkMode':
       applyTheme();
       break;
+    // Command Code 双号代理配置变化:重启代理进程
+    case 'ccProxy.enabled':
+    case 'ccProxy.pythonPath':
+    case 'ccProxy.scriptPath':
+    case 'ccProxy.key1':
+    case 'ccProxy.key2':
+      ccProxy.restartIfNeeded(store, console);
+      break;
   }
 }
 
@@ -476,6 +485,8 @@ app.whenReady().then(() => {
   registry.register(opencodeProvider);
   registry.register(opencodeGoProvider);
   registry.register(commandGoatProvider);
+  // Command Code 双号代理:随监控器启动拉起(若已启用)
+  ccProxy.start(store, console);
   startSchedulerRuntime();
 
   setupIPC({
@@ -533,6 +544,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   app.isQuitting = true;
   if (scheduler) scheduler.stop();
+  ccProxy.stop();
   if (tray) { tray.destroy(); tray = null; }
 });
 

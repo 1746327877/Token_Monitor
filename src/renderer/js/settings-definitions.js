@@ -34,7 +34,12 @@ var tailDefinitions = [
   { group: '数据', key: 'data.historyDays', type: 'select', label: '历史数据保留', options: [
     { value: 3, label: '3 天' }, { value: 7, label: '7 天' }, { value: 30, label: '30 天' }
   ], default: 7 },
-  { group: '关于', key: 'apiKey', type: 'password', label: 'API Key', default: '' }
+  { group: '关于', key: 'apiKey', type: 'password', label: 'API Key', default: '' },
+  { group: 'Command Code 双号代理', key: 'ccProxy.enabled', type: 'toggle', label: '启用双号自动切换代理', default: false },
+  { group: 'Command Code 双号代理', key: 'ccProxy.pythonPath', type: 'text', label: 'Python 路径', default: 'python' },
+  { group: 'Command Code 双号代理', key: 'ccProxy.scriptPath', type: 'text', label: '代理脚本路径', default: 'D:\\code\\tools\\cc-proxy.py' },
+  { group: 'Command Code 双号代理', key: 'ccProxy.key1', type: 'password', label: 'Key 1(可选,优先用环境变量)', default: '' },
+  { group: 'Command Code 双号代理', key: 'ccProxy.key2', type: 'password', label: 'Key 2(可选,优先用环境变量)', default: '' }
 ];
 
 window.SettingsDefinitions = windowDefinitions.concat(platformDefinitions, componentDefinitions, tailDefinitions);
