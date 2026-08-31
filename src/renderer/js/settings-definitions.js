@@ -38,8 +38,8 @@ var tailDefinitions = [
   { group: 'Command Code 双号代理', key: 'ccProxy.enabled', type: 'toggle', label: '启用双号自动切换代理', default: false },
   { group: 'Command Code 双号代理', key: 'ccProxy.pythonPath', type: 'text', label: 'Python 路径', default: 'python' },
   { group: 'Command Code 双号代理', key: 'ccProxy.scriptPath', type: 'text', label: '代理脚本路径', default: 'D:\\code\\tools\\cc-proxy.py' },
-  { group: 'Command Code 双号代理', key: 'ccProxy.key1', type: 'password', label: 'Key 1(可选,优先用环境变量)', default: '' },
-  { group: 'Command Code 双号代理', key: 'ccProxy.key2', type: 'password', label: 'Key 2(可选,优先用环境变量)', default: '' }
+  { group: 'Command Code 双号代理', key: 'ccProxy.key1', type: 'password', label: '号1 Key(留空用环境变量)', default: '' },
+  { group: 'Command Code 双号代理', key: 'ccProxy.key2', type: 'password', label: '号2 Key(留空用环境变量)', default: '' }
 ];
 
 window.SettingsDefinitions = windowDefinitions.concat(platformDefinitions, componentDefinitions, tailDefinitions);

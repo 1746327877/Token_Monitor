@@ -1,6 +1,8 @@
 // Command Code 双号自动切换代理管理。
 // 用户提供 cc-proxy.py(python http 代理:转发到 api.commandcode.ai,遇到 403/429 自动切号),
-// 本模块在监控器启动时拉起它、退出时停掉。Key 优先级:系统环境变量 > 监控器设置里填的。
+// 本模块在监控器启动时拉起它、退出时停掉。
+// Key 与号绑定:号1 = 设置 ccProxy.key1,未填则回退环境变量 COMMAND_CODE_API_KEY;
+//             号2 = 设置 ccProxy.key2,未填则回退环境变量 COMMAND_CODE_API_KEY_2。
 const { spawn } = require('child_process');
 
 let proc = null;
@@ -22,24 +24,23 @@ function getConfig(store) {
   return cfg;
 }
 
-// Key 合并:环境变量优先,store 里填的作为补充(去重)。
+// 每个号的 key:设置里填了用设置的,否则回退同名环境变量。
+// 返回 [{ slot: 1|2, key: string|null }],slot 固定、顺序固定。
+function resolveSlotKeys(store) {
+  return [1, 2].map((slot) => {
+    const storeKey = (store && store.get('ccProxy.key' + slot)) || '';
+    const envName = slot === 1 ? 'COMMAND_CODE_API_KEY' : 'COMMAND_CODE_API_KEY_2';
+    const key = (storeKey.trim() || (process.env[envName] || '').trim()) || null;
+    return { slot: slot, key: key };
+  });
+}
+
+// 兼容旧调用:返回去重后的 key 数组(仅保留有效 key)。
 function resolveKeys(store) {
-  const keys = [];
-  const seen = new Set();
-  const push = (k) => {
-    k = (k || '').trim();
-    if (k && !seen.has(k)) {
-      seen.add(k);
-      keys.push(k);
-    }
-  };
-  ['COMMAND_CODE_API_KEY', 'COMMAND_CODE_API_KEY_2'].forEach((envName) => {
-    push(process.env[envName]);
-  });
-  ['key1', 'key2'].forEach((storeKey) => {
-    push(store && store.get('ccProxy.' + storeKey));
-  });
-  return keys;
+  return resolveSlotKeys(store)
+    .map((s) => s.key)
+    .filter(Boolean)
+    .filter((k, i, arr) => arr.indexOf(k) === i);
 }
 
 function buildEnv(store) {
@@ -122,4 +123,4 @@ function isRunning() {
   return !!(proc && proc.pid);
 }
 
-module.exports = { start, stop, restartIfNeeded, isRunning, getConfig, resolveKeys, buildEnv };
+module.exports = { start, stop, restartIfNeeded, isRunning, getConfig, resolveKeys, resolveSlotKeys, buildEnv };
