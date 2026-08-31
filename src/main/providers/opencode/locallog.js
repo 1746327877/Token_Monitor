@@ -24,10 +24,14 @@ const EXCLUDED_PROVIDERS = new Set(['command-code', 'commandcode']);
 //   cached = tokens.cache.read
 //   output = tokens.output + tokens.reasoning(reasoning 单独计费,费率同 output)
 //   total  = tokens.total(含缓存读取)或 input + cached + output
-function parseMessageData(data, fallbackId) {
-  if (!data || data.role !== 'assistant') return null;
+// V2 兼容:role 缺省(调用方已按表 type='assistant' 过滤)、providerID 在 data.model.providerID、
+//   tokens 无 total 字段(自己相加)。keepExcluded 为 true 时不过滤 commandcode(供 command-goat 统计)。
+function parseMessageData(data, fallbackId, opts) {
+  if (!data) return null;
+  if (data.role && data.role !== 'assistant') return null;
+  const o = opts || {};
   const providerID = data.providerID || (data.model && data.model.providerID) || null;
-  if (providerID && EXCLUDED_PROVIDERS.has(providerID)) return null;
+  if (!o.keepExcluded && providerID && EXCLUDED_PROVIDERS.has(providerID)) return null;
   const completed = data.time && data.time.completed;
   if (!completed || !data.tokens) return null;
   const tokens = data.tokens || {};
@@ -38,7 +42,8 @@ function parseMessageData(data, fallbackId) {
   return {
     id: data.id || fallbackId || null,
     ts: Number(completed) || null,
-    model: data.modelID || null,
+    model: data.modelID || (data.model && data.model.id) || null,
+    provider: providerID,
     usage: {
       input: input,
       cached: cached,
@@ -176,6 +181,7 @@ function mergeOpenCodeDaily(store, records) {
 }
 
 // 全量重算 opencode 每日聚合(覆盖旧键,避免重复计数)。
+// 优先读 V2 `session_message` 表(type 列区分角色),回退 V1 `message` 表(role 字段)。
 // 返回 records;打不开 DB 返回 null(调用方回退 JSON)。
 function readLocalLogFromDb(store, dbPath) {
   let DatabaseSync = null;
@@ -191,14 +197,7 @@ function readLocalLogFromDb(store, dbPath) {
     return null;
   }
   try {
-    const rows = db.prepare('SELECT id, time_created, data FROM message').all();
-    const records = [];
-    rows.forEach((row) => {
-      let data;
-      try { data = JSON.parse(row.data); } catch (e) { data = null; }
-      const rec = parseMessageData(data, row.id);
-      if (rec) records.push(rec);
-    });
+    const records = readMessagesFromDb(db);
     mergeOpenCodeDaily(store, records);
     return records;
   } catch (e) {
@@ -206,6 +205,36 @@ function readLocalLogFromDb(store, dbPath) {
   } finally {
     try { db.close(); } catch (e) {}
   }
+}
+
+// 从已打开的 db 读取 opencode 消息记录:
+//   V2:session_message 表存在 → SELECT 该表(type='assistant')
+//   V1:回退 message 表(SELECT 全量,parseMessageData 按 role 过滤)
+function readMessagesFromDb(db) {
+  const hasSessionMessage = db.prepare(
+    "SELECT COUNT(*) c FROM sqlite_master WHERE type='table' AND name='session_message'"
+  ).get().c > 0;
+
+  const records = [];
+  if (hasSessionMessage) {
+    // V2:角色在 type 列,providerID 在 data.model.providerID;只取已完成且有 tokens 的 assistant
+    const rows = db.prepare("SELECT id, time_created, data FROM session_message WHERE type='assistant'").all();
+    rows.forEach((row) => {
+      let data;
+      try { data = JSON.parse(row.data); } catch (e) { data = null; }
+      const rec = parseMessageData(data, row.id);
+      if (rec) records.push(rec);
+    });
+  } else {
+    const rows = db.prepare('SELECT id, time_created, data FROM message').all();
+    rows.forEach((row) => {
+      let data;
+      try { data = JSON.parse(row.data); } catch (e) { data = null; }
+      const rec = parseMessageData(data, row.id);
+      if (rec) records.push(rec);
+    });
+  }
+  return records;
 }
 
 // JSON 回退路径:增量扫描 storage/message/**/*.json。
@@ -285,6 +314,7 @@ function getStats(ctx) {
 // 读取 opencode.db 里 command-code/commandcode 消息的每日聚合。
 // 用户在 opencode 里用 cmd 套餐,消息都在这里(按天精确);command-goat 卡片用它做每日 token 统计,
 // 不再依赖网页上被四舍五入的月度总量。
+// V2:session_message 表(type 列);V1:message 表。keepExcluded 让 commandcode 记录通过 parseMessageData。
 function readCommandCodeDaily(dbPath) {
   let DatabaseSync = null;
   try {
@@ -299,27 +329,37 @@ function readCommandCodeDaily(dbPath) {
     return {};
   }
   try {
-    const rows = db.prepare('SELECT time_created, data FROM message').all();
+    const hasSessionMessage = db.prepare(
+      "SELECT COUNT(*) c FROM sqlite_master WHERE type='table' AND name='session_message'"
+    ).get().c > 0;
+
     const out = {};
-    rows.forEach((row) => {
-      let data;
-      try { data = JSON.parse(row.data); } catch (e) { data = null; }
-      if (!data || data.role !== 'assistant') return;
-      const pid = data.providerID || (data.model && data.model.providerID) || null;
-      if (pid !== 'command-code' && pid !== 'commandcode') return;
-      const completed = data.time && data.time.completed;
-      if (!completed || !data.tokens) return;
-      const tokens = data.tokens;
-      const cache = tokens.cache || {};
-      const total = Number(tokens.total)
-        || ((Number(tokens.input) || 0) + (Number(cache.read) || 0) + (Number(tokens.output) || 0) + (Number(tokens.reasoning) || 0));
-      const day = localDayStr(Number(completed));
+    const acc = (rec) => {
+      if (!rec) return;
+      if (rec.provider !== 'command-code' && rec.provider !== 'commandcode') return;
+      const day = localDayStr(rec.ts);
       const e = out[day] || { total: 0, cost: 0, messages: 0 };
-      e.total += total;
-      e.cost += Number(data.cost) || 0;
+      e.total += rec.usage.total;
+      e.cost += rec.cost;
       e.messages += 1;
       out[day] = e;
-    });
+    };
+
+    if (hasSessionMessage) {
+      const rows = db.prepare("SELECT id, time_created, data FROM session_message WHERE type='assistant'").all();
+      rows.forEach((row) => {
+        let data;
+        try { data = JSON.parse(row.data); } catch (e) { data = null; }
+        acc(parseMessageData(data, row.id, { keepExcluded: true }));
+      });
+    } else {
+      const rows = db.prepare('SELECT id, time_created, data FROM message').all();
+      rows.forEach((row) => {
+        let data;
+        try { data = JSON.parse(row.data); } catch (e) { data = null; }
+        acc(parseMessageData(data, row.id, { keepExcluded: true }));
+      });
+    }
     return out;
   } catch (e) {
     return {};

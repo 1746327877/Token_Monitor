@@ -9,6 +9,8 @@ const {
   parseMessageData,
   scanMessageFiles,
   readLocalLog,
+  readLocalLogFromDb,
+  readCommandCodeDaily,
   getStats
 } = require('../src/main/providers/opencode/locallog');
 
@@ -239,4 +241,87 @@ test('getStats returns today and total aggregates from usageDaily', () => {
   assert.equal(stats.total.cost, 0.05 + 0.02);
   assert.equal(stats.total.messages, 4 + 2);
   assert.equal(stats.total.days, 2);
+});
+
+// V2 消息:type 在表列,data 里无 role;providerID 在 data.model.providerID;
+// tokens 无 total 字段;完成态有 time.completed。此辅助构造一条可插入 session_message 的 data。
+function v2MessageData(overrides) {
+  return JSON.stringify(Object.assign({
+    time: { created: 1783306059300, streamed: 1783306062000, completed: 1783306062600 },
+    agent: 'build',
+    model: { id: 'deepseek-v4-flash', providerID: 'opencode-go', variant: 'default' },
+    content: [{ type: 'text', text: 'hello' }],
+    finish: 'stop',
+    cost: 0.00183232,
+    tokens: { input: 12828, output: 98, reasoning: 32, cache: { read: 500, write: 0 } }
+  }, overrides));
+}
+
+function makeV2Db() {
+  const { DatabaseSync } = require('node:sqlite');
+  const dir = makeTempDir();
+  const dbPath = path.join(dir, 'opencode.db');
+  const db = new DatabaseSync(dbPath);
+  db.exec('CREATE TABLE session_message (id TEXT PRIMARY KEY, session_id TEXT, type TEXT, seq INTEGER, time_created INTEGER, time_updated INTEGER, data TEXT)');
+  const ins = db.prepare('INSERT INTO session_message (id, session_id, type, seq, time_created, time_updated, data) VALUES (?, ?, ?, ?, ?, ?, ?)');
+  return { db, dbPath, dir, ins };
+}
+
+test('readLocalLogFromDb reads V2 session_message table (provider in model, no tokens.total)', () => {
+  const { db, dbPath, dir, ins } = makeV2Db();
+  const now = Date.now();
+  try {
+    // opencode-go 已完成消息:input12828 + cached500 + output98 + reasoning32
+    ins.run('m1', 's1', 'assistant', 1, now - 1000, now, v2MessageData({ id: undefined, time: { created: now - 1000, completed: now - 1000 } }));
+    // commandcode 消息:应被 opencode 统计排除(由 command-goat 统计)
+    ins.run('m2', 's1', 'assistant', 2, now, now, v2MessageData({
+      model: { id: 'deepseek-v4-flash', providerID: 'commandcode', variant: 'default' },
+      tokens: { input: 5000, output: 100, reasoning: 0, cache: { read: 9000, write: 0 } }
+    }));
+    // 流式中(无 completed):不计数
+    ins.run('m3', 's1', 'assistant', 3, now, now, v2MessageData({ time: { created: now } }));
+    // user 消息:不计数
+    ins.run('m4', 's1', 'user', 4, now, now, v2MessageData());
+
+    const records = readLocalLogFromDb(null, dbPath);
+    assert.ok(records);
+    assert.equal(records.length, 1, 'only the completed opencode-go assistant message counts');
+    assert.equal(records[0].usage.total, 12828 + 500 + 98 + 32);
+    assert.equal(records[0].provider, 'opencode-go');
+    assert.equal(records[0].cost, 0.00183232);
+
+    // readCommandCodeDaily 读同一 V2 DB:只返回 commandcode
+    const cc = readCommandCodeDaily(dbPath);
+    assert.ok(cc);
+    // commandcode 消息 completed=1783306062600 → 2026-07-06
+    assert.equal(cc['2026-07-06'].total, 5000 + 9000 + 100);
+    assert.equal(cc['2026-07-06'].messages, 1);
+  } finally {
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('readLocalLogFromDb falls back to V1 message table when session_message missing', () => {
+  const { DatabaseSync } = require('node:sqlite');
+  const dir = makeTempDir();
+  const dbPath = path.join(dir, 'opencode.db');
+  const db = new DatabaseSync(dbPath);
+  db.exec('CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, time_updated INTEGER, data TEXT)');
+  const ins = db.prepare('INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, ?, ?)');
+  const now = Date.now();
+  try {
+    ins.run('v1m1', 's1', now, now, JSON.stringify({
+      id: 'v1m1', role: 'assistant', time: { created: now, completed: now },
+      providerID: 'opencode-go', modelID: 'deepseek-v4-flash', cost: 0.01,
+      tokens: { input: 100, output: 20, reasoning: 5, cache: { read: 30, write: 0 } }
+    }));
+    const records = readLocalLogFromDb(null, dbPath);
+    assert.ok(records);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].usage.total, 100 + 30 + 20 + 5);
+  } finally {
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
