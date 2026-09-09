@@ -100,6 +100,16 @@ module.exports = function setupIPC(deps) {
     return provider.getStats({ store: deps.store, logger: console });
   });
 
+  /* ======== Hermes 使用卡片 ======== */
+
+  ipcMain.handle('get:hermes-stats', () => {
+    const provider = deps.registry.get('hermes');
+    if (!provider || typeof provider.getStats !== 'function') {
+      return { today: { date: null, tokens: 0, cost: 0, messages: 0, models: [] }, total: { tokens: 0, cost: 0, messages: 0, days: 0 } };
+    }
+    return provider.getStats({ store: deps.store, logger: console });
+  });
+
   /* ======== OpenCode Go / Command Goat 额度登录(console/studio 捕获) ======== */
 
   function sessionWindow(title, partition) {

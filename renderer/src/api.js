@@ -17,6 +17,10 @@ export function getOpenCodeStats() {
   return api.invoke('get:opencode-stats');
 }
 
+export function getHermesStats() {
+  return api.invoke('get:hermes-stats');
+}
+
 export function getCommandGoatStats() {
   return api.invoke('get:command-goat-stats');
 }

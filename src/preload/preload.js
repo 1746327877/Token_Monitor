@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('api', {
       'get:providers',
       'get:heatmap',
       'get:opencode-stats',
+      'get:hermes-stats',
       'get:command-goat-stats',
       'get:command-goat-accounts',
       'get:bounds',

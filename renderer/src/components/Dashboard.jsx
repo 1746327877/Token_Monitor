@@ -20,6 +20,7 @@ import QuotaCard from './QuotaCard.jsx';
 import TokenHeatmap from './TokenHeatmap.jsx';
 import ProviderBar from './ProviderBar.jsx';
 import OpenCodeCard from './OpenCodeCard.jsx';
+import HermesCard from './HermesCard.jsx';
 import CommandGoatStatsCard from './CommandGoatStatsCard.jsx';
 
 const LABELS = {
@@ -31,11 +32,12 @@ const LABELS = {
   'token-line': 'Token 消耗',
   'cost-line': '费用增长趋势',
   'opencode-stats-card': 'OpenCode 使用',
+  'hermes-stats-card': 'Hermes 使用',
   'command-goat-stats-card': 'Command Goat 使用'
 };
 
 const FEE_IDS = ['balance-card', 'today-cost-card', 'cache-rate-card'];
-const STATS_IDS = ['opencode-stats-card', 'command-goat-stats-card'];
+const STATS_IDS = ['opencode-stats-card', 'hermes-stats-card', 'command-goat-stats-card'];
 // 嵌入式板块:quota 卡与热力图也作为 grid item(自带标题,不再渲染 component-title)
 const QUOTA_IDS = ['quota-codex', 'quota-kimi', 'quota-opencode-go', 'quota-command-goat'];
 const EMBED_IDS = QUOTA_IDS.concat(['token-heatmap']);
@@ -56,6 +58,7 @@ const MIN_SIZES = {
   'cost-line': { w: 4, h: 4 },
   'token-heatmap': { w: 6, h: 10 },
   'opencode-stats-card': { w: 4, h: 3 },
+  'hermes-stats-card': { w: 4, h: 3 },
   'command-goat-stats-card': { w: 4, h: 3 }
 };
 
@@ -88,6 +91,9 @@ function WidgetBody({ id, onContentChange }) {
   }
   if (id === 'opencode-stats-card') {
     return <OpenCodeCard />;
+  }
+  if (id === 'hermes-stats-card') {
+    return <HermesCard />;
   }
   if (id === 'command-goat-stats-card') {
     return <CommandGoatStatsCard />;

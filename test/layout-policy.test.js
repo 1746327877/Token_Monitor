@@ -106,15 +106,15 @@ test('migration preserves compact component order', () => {
 
   assert.deepEqual(
     migrated.compact.items.map((item) => item.id),
-    ['quota-opencode-go', 'quota-command-goat', 'command-goat-stats-card', 'quota-codex', 'quota-kimi', 'provider-bar', 'cost-line', 'balance-card', 'today-cost-card', 'cache-rate-card', 'model-bar', 'token-line', 'token-heatmap', 'opencode-stats-card']
+    ['quota-opencode-go', 'quota-command-goat', 'command-goat-stats-card', 'quota-codex', 'quota-kimi', 'provider-bar', 'cost-line', 'balance-card', 'today-cost-card', 'cache-rate-card', 'model-bar', 'token-line', 'token-heatmap', 'opencode-stats-card', 'hermes-stats-card']
   );
   assert.deepEqual(
     migrated.compact.items.map((item) => item.y),
-    [0, 7, 14, 18, 25, 32, 38, 44, 44, 44, 48, 54, 60, 70]
+    [0, 7, 14, 18, 25, 32, 38, 44, 44, 44, 48, 54, 60, 70, 70]
   );
   assert.deepEqual(
     migrated.compact.items.map((item) => item.x),
-    [0, 0, 0, 0, 0, 0, 0, 0, 4, 8, 0, 0, 0, 0]
+    [0, 0, 0, 0, 0, 0, 0, 0, 4, 8, 0, 0, 0, 0, 4]
   );
 });
 
@@ -130,9 +130,9 @@ test('validation removes unknown and duplicate ids but restores missing records'
 
   assert.deepEqual(
     result.items.map((item) => item.id).sort(),
-    ['balance-card', 'cache-rate-card', 'command-goat-stats-card', 'cost-line', 'model-bar', 'opencode-stats-card', 'provider-bar', 'quota-codex', 'quota-command-goat', 'quota-kimi', 'quota-opencode-go', 'today-cost-card', 'token-heatmap', 'token-line']
+    ['balance-card', 'cache-rate-card', 'command-goat-stats-card', 'cost-line', 'hermes-stats-card', 'model-bar', 'opencode-stats-card', 'provider-bar', 'quota-codex', 'quota-command-goat', 'quota-kimi', 'quota-opencode-go', 'today-cost-card', 'token-heatmap', 'token-line']
   );
-  assert.equal(new Set(result.items.map((item) => item.id)).size, 14);
+  assert.equal(new Set(result.items.map((item) => item.id)).size, 15);
 });
 
 test('validation commits legal preset geometry and resolves overlap', () => {

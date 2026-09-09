@@ -10,6 +10,7 @@ const kimiProvider = require('./providers/kimi');
 const opencodeProvider = require('./providers/opencode');
 const opencodeGoProvider = require('./providers/opencode-go');
 const commandGoatProvider = require('./providers/command-goat');
+const hermesProvider = require('./providers/hermes');
 const { startScheduler } = require('./core/scheduler');
 const ccProxy = require('./core/cc-proxy');
 const { ensureWindowOnScreen } = require('./core/window-position');
@@ -498,6 +499,7 @@ app.whenReady().then(() => {
   registry.register(opencodeProvider);
   registry.register(opencodeGoProvider);
   registry.register(commandGoatProvider);
+  registry.register(hermesProvider);
   // Command Code 双号代理:随监控器启动拉起(若已启用)
   ccProxy.start(store, console);
   startSchedulerRuntime();

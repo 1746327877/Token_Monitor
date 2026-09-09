@@ -313,6 +313,27 @@ const components = [
       compact: { x: 0, y: 70, w: 4, h: 4, preset: 'card' },
       wide: { x: 0, y: 70, w: 4, h: 4, preset: 'card' }
     }
+  },
+  {
+    id: 'hermes-stats-card',
+    label: 'Hermes 使用',
+    settingsKey: 'components.hermesStatsCard',
+    defaultVisible: true,
+    aspectRatio: 1,
+    presets: {
+      compact: [
+        { name: 'card', w: 4, h: 4 },
+        { name: 'wide', w: 6, h: 4 }
+      ],
+      wide: [
+        { name: 'card', w: 4, h: 4 },
+        { name: 'wide', w: 6, h: 4 }
+      ]
+    },
+    defaultPlacement: {
+      compact: { x: 4, y: 70, w: 4, h: 4, preset: 'card' },
+      wide: { x: 4, y: 70, w: 4, h: 4, preset: 'card' }
+    }
   }
 ];
 
