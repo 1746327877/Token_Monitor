@@ -8,9 +8,7 @@ const { DatabaseSync } = require('node:sqlite');
 const {
   readHermesUsage,
   getStats,
-  rowKey,
-  splitByMessages,
-  BASELINE_KEY
+  splitByMessages
 } = require('../src/main/providers/hermes/locallog');
 
 function makeStore() {
@@ -62,12 +60,11 @@ function addMessage(db, sessionId, tsSec, role) {
     .run(sessionId, role || 'assistant', tsSec);
 }
 
-// 当天零点 → 秒
 function daySec(y, m, d) {
   return Math.round(new Date(y, m - 1, d, 12, 0, 0).getTime() / 1000);
 }
 
-test('first import splits a cross-day session by daily message counts', () => {
+test('cross-day session tokens are split across days by message counts', () => {
   const { db, dbPath, dir } = makeDb();
   const sid = 's1';
   // 8/19 有 3 条 assistant,8/20 有 1 条 → 总量 4000 按 3:1 拆
@@ -78,30 +75,23 @@ test('first import splits a cross-day session by daily message counts', () => {
   });
   try {
     const store = makeStore();
-    const result = readHermesUsage(store, dbPath);
-    assert.equal(result.days, 2);
+    readHermesUsage(store, dbPath);
     const ud = store.get('usageDaily');
     const d19 = ud['hermes:2026-08-19'];
     const d20 = ud['hermes:2026-08-20'];
     assert.ok(d19 && d20, 'both days present');
-    // 4000 总量按 3:1 拆:19 日 3000,20 日 1000
     assert.equal(d19.total, 3000);
     assert.equal(d20.total, 1000);
-    // 模型分布
+    assert.equal(d19.models.length, 1);
     assert.equal(d19.models[0].model, 'mimo-v2.5');
     assert.equal(d19.models[0].tokens, 3000);
-    // 基线已建立(之后是增量模式)
-    assert.ok(store.get(BASELINE_KEY)[rowKey({
-      session_id: sid, model: 'mimo-v2.5', billing_provider: 'commandcode',
-      billing_base_url: 'https://api.commandcode.ai/provider/v1', task: ''
-    })]);
   } finally {
     db.close();
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('same-day rows land on that day on first import', () => {
+test('same-day rows land on that day', () => {
   const { db, dbPath, dir } = makeDb();
   const ts = daySec(2026, 9, 1);
   addMessage(db, 'sA', ts, 'assistant');
@@ -119,26 +109,61 @@ test('same-day rows land on that day on first import', () => {
   }
 });
 
-test('second poll applies only the delta to the last_seen day', () => {
+test('readHermesUsage is idempotent - repeated polls never inflate totals (regression)', () => {
   const { db, dbPath, dir } = makeDb();
-  const ts = daySec(2026, 9, 2);
-  addMessage(db, 'sB', ts, 'assistant');
-  addUsage(db, { session_id: 'sB', model: 'glm-5.3-flash', input: 1000, first: ts, last: ts, calls: 1 });
+  const ts1 = daySec(2026, 8, 20);
+  const ts2 = daySec(2026, 8, 20) + 3600;
+  addMessage(db, 's1', ts1, 'assistant');
+  addMessage(db, 's1', ts2, 'assistant');
+  addUsage(db, { session_id: 's1', model: 'mimo-v2.5', input: 1_000_000, output: 500_000, cached: 2_000_000, first: ts1, last: ts2, calls: 2 });
   try {
     const store = makeStore();
     readHermesUsage(store, dbPath);
-    assert.equal(store.get('usageDaily')['hermes:2026-09-02'].total, 1000);
+    const first = JSON.stringify(store.get('usageDaily')['hermes:2026-08-20']);
+    // 模拟运行 5 轮轮询
+    for (let i = 0; i < 5; i++) readHermesUsage(store, dbPath);
+    const after = store.get('usageDaily')['hermes:2026-08-20'];
+    assert.equal(JSON.stringify(after), first, 'repeated polls must not change the value');
+    assert.equal(after.total, 3_500_000, 'total stays exact, no inflation');
+    assert.equal(after.models.length, 1, 'models array must not grow');
+    assert.equal(after.messages, 2);
+  } finally {
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
-    // 会话继续:行累计到 3000,calls 3(同一行 UPDATE 累加,模拟真实行为)
-    db.prepare(`UPDATE session_model_usage SET input_tokens = 3000, api_call_count = 3, last_seen = ?
-      WHERE session_id = 'sB'`).run(daySec(2026, 9, 3));
+test('multiple billing_base_url variants for one session are summed, not duplicated per poll', () => {
+  const { db, dbPath, dir } = makeDb();
+  const ts = daySec(2026, 9, 3);
+  addMessage(db, 'sv', ts, 'assistant');
+  // 同一 session+model,base_url 带/不带斜杠各一行(hermes 格式变更产生)
+  addUsage(db, { session_id: 'sv', model: 'mimo-v2.5', input: 1000, billing_base_url: 'https://opencode.ai/zen/go/v1', first: ts, last: ts });
+  addUsage(db, { session_id: 'sv', model: 'mimo-v2.5', input: 2000, billing_base_url: 'https://opencode.ai/zen/go/v1/', first: ts, last: ts });
+  try {
+    const store = makeStore();
     readHermesUsage(store, dbPath);
+    readHermesUsage(store, dbPath);
+    const d = store.get('usageDaily')['hermes:2026-09-03'];
+    assert.equal(d.total, 3000, 'both variants summed once');
+  } finally {
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
-    const ud = store.get('usageDaily');
-    // 09-02 保持 1000(不重算历史),09-03 得增量 2000
-    assert.equal(ud['hermes:2026-09-02'].total, 1000);
-    assert.equal(ud['hermes:2026-09-03'].total, 2000);
-    assert.equal(ud['hermes:2026-09-03'].messages, 2);
+test('row without assistant messages falls back to its last_seen day', () => {
+  const { db, dbPath, dir } = makeDb();
+  const ts = daySec(2026, 9, 5);
+  // 只有 user 消息,没有 assistant
+  addMessage(db, 'su', ts, 'user');
+  addUsage(db, { session_id: 'su', model: 'glm-5.3-flash', input: 700, first: ts, last: ts, calls: 1 });
+  try {
+    const store = makeStore();
+    readHermesUsage(store, dbPath);
+    const d = store.get('usageDaily')['hermes:2026-09-05'];
+    assert.ok(d, 'fallback day present');
+    assert.equal(d.total, 700);
   } finally {
     db.close();
     fs.rmSync(dir, { recursive: true, force: true });
@@ -147,12 +172,7 @@ test('second poll applies only the delta to the last_seen day', () => {
 
 test('getStats aggregates hermes days from usageDaily', () => {
   const data = {};
-  const store = {
-    get(k) {
-      if (k === 'usageDaily') return data.usageDaily;
-      return undefined;
-    }
-  };
+  const store = { get(k) { return k === 'usageDaily' ? data.usageDaily : undefined; } };
   const today = new Date().toLocaleDateString('sv-SE');
   data.usageDaily = {};
   data.usageDaily['hermes:' + today] = { total: 300, cost: 0, messages: 2, models: [{ model: 'm1', tokens: 300, messages: 2 }] };
