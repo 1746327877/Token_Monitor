@@ -80,7 +80,11 @@ async function fetchQuota(ctx) {
   return parseQuota(data);
 }
 
-module.exports = { parseQuota, fetchQuota, buildHeaders, windowFromPercent, LIMITS, CRED_KEY, parseScrapedUsage, parseResetSeconds };
+// 新版 console 用量接口路径(2026-09 改版后,页面用量仪表由该接口渲染)。
+// 注意带 /console 前缀:裸 /api/go/status 返回 404,控制台 base 下返回 401(需登录)。
+const GO_STATUS_PATH = '/console/api/go/status';
+
+module.exports = { parseQuota, fetchQuota, buildHeaders, windowFromPercent, LIMITS, CRED_KEY, parseScrapedUsage, parseResetSeconds, parseQuotaStatus, GO_STATUS_PATH };
 
 // ============ DOM 抓取解析(SSR 直接把用量渲染进页面,无需 _server 请求) ============
 
@@ -137,6 +141,69 @@ function parseScrapedUsage(items, now) {
       resetsAt: nowMs + resetSec * 1000
     });
   }
+  if (!windows.length) return null;
+  return makeQuotaState('opencode-go', 'subscription', windows, null, 'OpenCode Go', null, nowMs);
+}
+
+// ============ /api/go/status 解析(新版 console 用量接口,2026-09 改版后) ============
+// 响应形如 { access, meters: { fiveHour, week, month }, endsAt },
+// 每个 meter: { usedMicroCents, limitMicroCents, resetsAt }。
+// 页面用同一接口渲染 "Go usage limits" 三个仪表;直接调接口比 DOM 抓取更稳。
+
+// microCents(整数/数字字符串均可) → 美元,保留到分。
+function toMicroDollars(v) {
+  if (typeof v === 'bigint') v = Number(v);
+  if (typeof v === 'string') {
+    if (!/^-?\d+(\.\d+)?$/.test(v.trim())) return 0;
+    v = parseFloat(v);
+  }
+  if (typeof v !== 'number' || !isFinite(v)) return 0;
+  return Math.round(v / 10000) / 100;
+}
+
+// resetsAt/endsAt(ISO 字符串或 epoch 秒/毫秒) → ms 时间戳,解析失败返回 null。
+function toResetMs(v) {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'number' && isFinite(v)) {
+    return v < 1e12 ? Math.round(v * 1000) : Math.round(v);
+  }
+  const t = Date.parse(String(v));
+  return isNaN(t) ? null : t;
+}
+
+const STATUS_METER_DEFS = [
+  { key: 'fiveHour', kind: '5h', name: '5 小时窗口' },
+  { key: 'week', kind: 'weekly', name: '本周额度' },
+  { key: 'month', kind: 'monthly', name: '本月额度' }
+];
+
+function parseQuotaStatus(data, now) {
+  if (!data || typeof data !== 'object') return null;
+  const root = data.data || data.result || data;
+  if (!root || typeof root !== 'object') return null;
+  const meters = root.meters;
+  if (!meters || typeof meters !== 'object') return null;
+  const nowMs = now || Date.now();
+  const endsAt = toResetMs(root.endsAt);
+  const windows = [];
+  STATUS_METER_DEFS.forEach((def) => {
+    const m = meters[def.key];
+    if (!m || typeof m !== 'object') return;
+    const limit = toMicroDollars(m.limitMicroCents);
+    if (!(limit > 0)) return;
+    const used = Math.min(Math.max(toMicroDollars(m.usedMicroCents), 0), limit);
+    let resetsAt = toResetMs(m.resetsAt);
+    // 月度仪表取订阅周期结束(与页面行为一致)
+    if (resetsAt === null && def.kind === 'monthly') resetsAt = endsAt;
+    windows.push({
+      kind: def.kind,
+      name: def.name,
+      used: used,
+      limit: limit,
+      remaining: Math.max(0, Math.round((limit - used) * 100) / 100),
+      resetsAt: resetsAt
+    });
+  });
   if (!windows.length) return null;
   return makeQuotaState('opencode-go', 'subscription', windows, null, 'OpenCode Go', null, nowMs);
 }

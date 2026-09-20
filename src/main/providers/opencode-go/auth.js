@@ -1,8 +1,8 @@
-// OpenCode Go console 会话:弹窗登录 opencode.ai,SSR 会把用量直接渲染进 /go 页面。
-// 因此登录/轮询都通过"加载页面 + 抓取 DOM(usage-item 的百分比与重置时间)"实现,
-// 不再依赖拦截 _server 请求。会话 cookie 由持久化 partition('persist:opencode-console')保存。
+// OpenCode Go console 会话:弹窗登录 opencode.ai,进入 /console/<org>/go 后在页面上下文调
+// /api/go/status 拿用量(2026-09 改版后用量仪表由该接口渲染,旧 data-slot DOM 已移除)。
+// 会话 cookie 由持久化 partition('persist:opencode-console')保存。
 const { BrowserWindow } = require('electron');
-const { parseScrapedUsage, CRED_KEY } = require('./quota');
+const { parseScrapedUsage, parseQuotaStatus, GO_STATUS_PATH, CRED_KEY } = require('./quota');
 
 const CONSOLE_URL = 'https://opencode.ai/auth';
 const PARTITION = 'persist:opencode-console';
@@ -78,11 +78,72 @@ async function waitForUsage(win, timeoutMs) {
 }
 
 function extractWorkspace(url) {
-  const m = /\/workspace\/([^/?#]+)/.exec(String(url || ''));
-  return m ? m[1] : null;
+  // 兼容新旧两套 console 路由:旧 /workspace/<id>/...,新 /console/<orgId>/...(orgId 形如 org_*/wrk_*)。
+  const m = /\/(?:workspace|console)\/([^/?#]+)/.exec(String(url || ''));
+  if (!m) return null;
+  if (/^(auth|login|signup)$/i.test(m[1])) return null;
+  return m[1];
 }
 
-// 登录捕获:可见窗口打开 /auth → 用户 SSO 登录 → 自动跳 /workspace/<id>/go → 抓 DOM。
+// 新版 Go 订阅页地址(2026-09 改版后,旧 /workspace/<id>/go 已失效)。
+function goPageUrl(workspaceID) {
+  return 'https://opencode.ai/console/' + workspaceID + '/go';
+}
+
+function isGoPath(pathname) {
+  return /\/go(\/|$)/.test(String(pathname || ''));
+}
+
+function isAuthPath(pathname) {
+  return /\/(auth|login|signup)($|\/|\?)/.test(String(pathname || ''));
+}
+
+// 在页面上下文里调同源 /api/go/status(自动带 partition 的登录 cookie),
+// 比 DOM 抓取更稳:新版页面用量仪表直接由该接口渲染。
+function apiStatusScript() {
+  return '(() => fetch(' + JSON.stringify(GO_STATUS_PATH) +
+    ', { headers: { accept: "application/json" }, credentials: "same-origin" })' +
+    '.then(async (r) => ({ status: r.status, body: await r.text() }))' +
+    '.catch((e) => ({ error: String((e && e.message) || e) })))()';
+}
+
+async function fetchStatusJson(win) {
+  let raw = null;
+  try {
+    raw = await win.webContents.executeJavaScript(apiStatusScript());
+  } catch (e) {
+    return { error: String((e && e.message) || e) };
+  }
+  if (!raw || typeof raw !== 'object') return { error: 'empty response' };
+  if (raw.error) return { error: raw.error };
+  if (raw.status === 401 || raw.status === 403) return { status: raw.status, unauthorized: true };
+  let body = raw.body;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch (e) { return { status: raw.status, error: 'invalid json' }; }
+  }
+  return { status: raw.status, body: body };
+}
+
+// 等待地址栏进入 <org>/go。allowAuth=true 时(登录流程)不把登录页判为过期,只管等。
+async function waitForGoPage(win, timeoutMs, allowAuth) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    let url = '';
+    try { url = win.webContents.getURL(); } catch (e) {}
+    let pathname = '';
+    try { pathname = new URL(url).pathname; } catch (e) {}
+    if (isGoPath(pathname)) {
+      const id = extractWorkspace(url);
+      if (id) return { workspaceID: id };
+    } else if (!allowAuth && isAuthPath(pathname)) {
+      return { expired: true, url: url };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  return { timeout: true };
+}
+
+// 登录捕获:可见窗口打开 /auth → 用户 SSO 登录 → 自动跳 /console/<org>/go → 调接口拿用量。
 // 成功 resolve 归一化后的 QuotaState,并把 workspaceID 写入 store。
 function captureSession(ctx) {
   const logger = (ctx && ctx.logger) || console;
@@ -114,31 +175,58 @@ function captureSession(ctx) {
       reject(err);
     };
 
-    // 已登录落地到 workspace 页后,自动跳到 Go 订阅页(保留语言前缀)
+    // 已登录落地到 workspace/console 页后,自动跳到 Go 订阅页
     win.webContents.on('did-navigate', (e, url) => {
       logger.log('[opencode-go] navigate:', url);
-      workspaceID = workspaceID || extractWorkspace(url);
-      const m = /(.*\/workspace\/[^/?#]+)/.exec(url);
-      if (!m) return;
-      let pathname;
+      const navWorkspaceID = extractWorkspace(url);
+      let pathname = '';
       try { pathname = new URL(url).pathname; } catch (err) { return; }
-      if (!/\/go(\/|$)/.test(pathname)) {
-        logger.log('[opencode-go] goto go page:', m[1] + '/go');
-        win.loadURL(m[1] + '/go');
+      if (!isGoPath(pathname) && navWorkspaceID) {
+        let origin = 'https://opencode.ai';
+        try { origin = new URL(url).origin; } catch (err) {}
+        const target = origin + '/console/' + navWorkspaceID + '/go';
+        if (url !== target) {
+          logger.log('[opencode-go] goto go page:', target);
+          try { win.loadURL(target); } catch (err) {}
+        }
       }
     });
 
-    // 等 usage-item 渲染出来后抓取(最长 40s,覆盖登录时间)
+    // 等进入 Go 页后调 /api/go/status 拿用量(最长 120s,覆盖登录时间)
     async function pollScrape() {
-      const items = await waitForUsage(win, 40000);
+      const gate = await waitForGoPage(win, 120000, true);
       if (settled) return;
-      const quota = parseScrapedUsage(items);
-      if (!quota) {
-        logger.log('[opencode-go] scraped items:', JSON.stringify(items));
-        fail(new Error('未在订阅页找到用量数据(请确认登录并订阅了 OpenCode Go)'));
+      if (gate.timeout || !gate.workspaceID) {
+        fail(new Error('未进入 OpenCode Go 订阅页(请登录并进入 Go 订阅页)'));
         return;
       }
-      logger.log('[opencode-go] captured usage from DOM, windows:', quota.windows.map((w) => w.kind).join(','));
+      workspaceID = gate.workspaceID;
+      let api = null;
+      try {
+        api = await fetchStatusJson(win);
+      } catch (e) {
+        api = { error: String((e && e.message) || e) };
+      }
+      if (settled) return;
+      if (api && (api.unauthorized || /unauthoriz|401|403/i.test(api.error || ''))) {
+        fail(new Error('登录后仍未授权(请确认该账号订阅了 OpenCode Go)'));
+        return;
+      }
+      const quota = api && api.body ? parseQuotaStatus(api.body) : null;
+      if (!quota) {
+        logger.log('[opencode-go] api status unparsable:', JSON.stringify(api && (api.body || api.error)));
+        // 兜底:旧 DOM 抓取(页面结构回退时仍可能命中)
+        const items = await waitForUsage(win, 10000);
+        const fallback = parseScrapedUsage(items);
+        if (!fallback) {
+          fail(new Error('未在订阅页找到用量数据(请确认登录并订阅了 OpenCode Go)'));
+          return;
+        }
+        logger.log('[opencode-go] captured usage from DOM, windows:', fallback.windows.map((w) => w.kind).join(','));
+        finish(fallback);
+        return;
+      }
+      logger.log('[opencode-go] captured usage from api, windows:', quota.windows.map((w) => w.kind).join(','));
       finish(quota);
     }
 
@@ -161,8 +249,9 @@ function captureSession(ctx) {
   });
 }
 
-// 轮询:5 分钟缓存 + 隐藏窗口加载 /go 页并抓 DOM(会话在持久化 partition 里,无需手动 cookie)。
-// 抓取失败时回退到最近一次成功缓存,绝不让卡片清空。
+// 轮询:5 分钟缓存 + 隐藏窗口打开 /go 页,在页面上下文调 /api/go/status
+// (会话在持久化 partition 里,无需手动 cookie)。
+// 401/403 或落到登录页 → 抛错标记过期(调度器据此亮重新登录);其他失败回退缓存,绝不让卡片清空。
 async function fetchQuota(ctx) {
   const store = ctx && ctx.store;
   const logger = (ctx && ctx.logger) || console;
@@ -173,21 +262,35 @@ async function fetchQuota(ctx) {
   if (cachedQuota && now - cachedAt < CACHE_MS) return cachedQuota;
   const win = new BrowserWindow(windowOptions({ show: false }));
   try {
-    await win.loadURL('https://opencode.ai/workspace/' + workspaceID + '/go');
-    const items = await waitForUsage(win, 25000);
-    if (!items.length) {
-      logger.log('[opencode-go] poll scrape empty; keeping cached quota');
-      return cachedQuota;
+    await win.loadURL(goPageUrl(workspaceID));
+    const gate = await waitForGoPage(win, 15000, false);
+    if (gate.expired) {
+      throw new Error('OpenCode Go 登录已过期,请重新登录');
     }
-    const quota = parseScrapedUsage(items);
+    const api = await fetchStatusJson(win);
+    if (api.unauthorized) {
+      throw new Error('OpenCode Go 登录已过期,请重新登录');
+    }
+    const quota = api.body ? parseQuotaStatus(api.body) : null;
     if (quota) {
       cachedQuota = quota;
       cachedAt = Date.now();
       return quota;
     }
-    logger.log('[opencode-go] poll scrape unparsable; keeping cached quota');
+    logger.log('[opencode-go] poll api unparsable, trying DOM fallback');
+    const items = await waitForUsage(win, 10000);
+    if (items.length) {
+      const fallback = parseScrapedUsage(items);
+      if (fallback) {
+        cachedQuota = fallback;
+        cachedAt = Date.now();
+        return fallback;
+      }
+    }
+    logger.log('[opencode-go] poll scrape empty; keeping cached quota');
     return cachedQuota;
   } catch (e) {
+    if (/登录已过期/.test((e && e.message) || '')) throw e;
     logger.log('[opencode-go] poll error:', e && e.message ? e.message : e, '; keeping cached quota');
     return cachedQuota;
   } finally {
@@ -195,4 +298,4 @@ async function fetchQuota(ctx) {
   }
 }
 
-module.exports = { captureSession, createSessionWindow, fetchQuota, readCred, writeCred, extractWorkspace, scrapeUsageScript, CONSOLE_URL, PARTITION };
+module.exports = { captureSession, createSessionWindow, fetchQuota, readCred, writeCred, extractWorkspace, goPageUrl, isGoPath, scrapeUsageScript, CONSOLE_URL, PARTITION };
