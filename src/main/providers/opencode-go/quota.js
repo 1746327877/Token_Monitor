@@ -98,12 +98,12 @@ function parsePercent(text) {
   return m ? clamp(parseFloat(m[1]), 0, 100) : null;
 }
 
-// 解析重置时间文本(zh/en):"2 小时 5 分钟"/"2 hours 5 minutes"/"几秒" → 秒。
+// 解析重置时间文本(zh/en):"2 小时 5 分钟"/"2 hours 5 minutes"/"4h 44m"/"几秒" → 秒。
 function parseResetSeconds(text) {
   const s = String(text || '');
   if (/几秒|few second/i.test(s)) return 0;
   let total = 0;
-  const re = /(\d+)\s*(天|小时|分钟|day|hour|minute)/gi;
+  const re = /(\d+)\s*(天|小时|分钟|days?|hours?|minutes?|[dhms])/gi;
   let m;
   while ((m = re.exec(s))) {
     const n = parseInt(m[1], 10);
@@ -111,6 +111,7 @@ function parseResetSeconds(text) {
     if (unit.indexOf('天') !== -1 || /^d/i.test(unit)) total += n * 86400;
     else if (unit.indexOf('小') !== -1 || /^h/i.test(unit)) total += n * 3600;
     else if (unit.indexOf('分') !== -1 || /^m/i.test(unit)) total += n * 60;
+    else if (/^s/i.test(unit)) total += n;
   }
   return total;
 }
@@ -145,12 +146,16 @@ function parseScrapedUsage(items, now) {
   return makeQuotaState('opencode-go', 'subscription', windows, null, 'OpenCode Go', null, nowMs);
 }
 
-// ============ /api/go/status 解析(新版 console 用量接口,2026-09 改版后) ============
-// 响应形如 { access, meters: { fiveHour, week, month }, endsAt },
-// 每个 meter: { usedMicroCents, limitMicroCents, resetsAt }。
+// ============ /console/api/go/status 解析(新版 console 用量接口,2026-09 改版后) ============
+// 响应形如 { access: { meters: { fiveHour, week, month }, endsAt }, ... },
+// 每个 meter: { usedMicroCents, limitMicroCents, resetsAt[, startsAt] }(microCents 常为字符串)。
+// 月度 meter 没有 resetsAt,取 access.endsAt(与页面行为一致)。
 // 页面用同一接口渲染 "Go usage limits" 三个仪表;直接调接口比 DOM 抓取更稳。
+// 注意:请求必须带 x-org-id 头(值为路由里的 org/wrk id),否则返回 400 BadRequest。
 
 // microCents(整数/数字字符串均可) → 美元,保留到分。
+// 注意:实测该字段比 USD micro-cents 大 100 倍(1200000000 对应 $12 套餐上限,
+// 且 $5.00 余额的 availableMicroCents 为 500000000),故除以 1e8;比例与页面一致。
 function toMicroDollars(v) {
   if (typeof v === 'bigint') v = Number(v);
   if (typeof v === 'string') {
@@ -158,7 +163,7 @@ function toMicroDollars(v) {
     v = parseFloat(v);
   }
   if (typeof v !== 'number' || !isFinite(v)) return 0;
-  return Math.round(v / 10000) / 100;
+  return Math.round(v / 1000000) / 100;
 }
 
 // resetsAt/endsAt(ISO 字符串或 epoch 秒/毫秒) → ms 时间戳,解析失败返回 null。
@@ -181,10 +186,12 @@ function parseQuotaStatus(data, now) {
   if (!data || typeof data !== 'object') return null;
   const root = data.data || data.result || data;
   if (!root || typeof root !== 'object') return null;
-  const meters = root.meters;
+  // 新版接口把仪表放在 access.meters 下(顶层 meters 保留做兼容)
+  const access = root.access && typeof root.access === 'object' ? root.access : null;
+  const meters = (access && access.meters) || root.meters;
   if (!meters || typeof meters !== 'object') return null;
   const nowMs = now || Date.now();
-  const endsAt = toResetMs(root.endsAt);
+  const endsAt = toResetMs(root.endsAt) || (access ? toResetMs(access.endsAt) : null);
   const windows = [];
   STATUS_METER_DEFS.forEach((def) => {
     const m = meters[def.key];

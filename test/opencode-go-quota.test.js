@@ -11,6 +11,8 @@ test('parseResetSeconds handles zh and en unit text', () => {
   assert.equal(parseResetSeconds('1 day 2 hours'), 86400 + 2 * 3600);
   assert.equal(parseResetSeconds('30 分钟'), 30 * 60);
   assert.equal(parseResetSeconds('5 minutes'), 300);
+  assert.equal(parseResetSeconds('Resets in 4h 44m'), 4 * 3600 + 44 * 60);
+  assert.equal(parseResetSeconds('Resets in 22h 32m'), 22 * 3600 + 32 * 60);
   assert.equal(parseResetSeconds('几秒'), 0);
   assert.equal(parseResetSeconds('a few seconds'), 0);
   assert.equal(parseResetSeconds(''), 0);
@@ -85,17 +87,28 @@ test('GO_STATUS_PATH is the status endpoint used by the console page', () => {
   assert.equal(GO_STATUS_PATH, '/console/api/go/status');
 });
 
+test('status fetch sends the org id header required by the endpoint', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.resolve(__dirname, '../src/main/providers/opencode-go/auth.js'), 'utf8');
+  assert.match(src, /x-org-id/);
+});
+
 test('parseQuotaStatus maps meter microCents into 5h/weekly/monthly windows', () => {
   const now = Date.now();
   const iso = (ms) => new Date(ms).toISOString();
+  // 真实接口结构:仪表在 access.meters 下,microCents 为字符串,month 没有 resetsAt
   const quota = parseQuotaStatus({
-    access: { startsAt: iso(now - 86400000), endsAt: iso(now + 20 * 86400000) },
-    meters: {
-      fiveHour: { usedMicroCents: 3080000, limitMicroCents: 14000000, resetsAt: iso(now + 3 * 3600000) },
-      week: { usedMicroCents: '5600000', limitMicroCents: '35000000', resetsAt: iso(now + 2 * 86400000) },
-      month: { usedMicroCents: 46200000, limitMicroCents: 70000000, resetsAt: iso(now + 20 * 86400000) }
-    },
-    endsAt: iso(now + 20 * 86400000)
+    subscriberUserId: 'acc_1',
+    access: {
+      startsAt: iso(now - 86400000),
+      endsAt: iso(now + 20 * 86400000),
+      meters: {
+        fiveHour: { startsAt: iso(now - 3600000), resetsAt: iso(now + 3 * 3600000), limitMicroCents: '1200000000', usedMicroCents: '27219625' },
+        week: { startsAt: iso(now - 86400000), resetsAt: iso(now + 2 * 86400000), limitMicroCents: '3000000000', usedMicroCents: '606144081' },
+        month: { limitMicroCents: '6000000000', usedMicroCents: '1926047180' }
+      }
+    }
   }, now);
   assert.ok(quota);
   assert.equal(quota.provider, 'opencode-go');
@@ -104,14 +117,40 @@ test('parseQuotaStatus maps meter microCents into 5h/weekly/monthly windows', ()
   assert.equal(quota.windows.length, 3);
   const byKind = {};
   quota.windows.forEach((w) => { byKind[w.kind] = w; });
-  assert.equal(byKind['5h'].used, 3.08);
-  assert.equal(byKind['5h'].limit, 14);
-  assert.equal(byKind['5h'].remaining, 10.92);
-  assert.equal(byKind.weekly.used, 5.6);
-  assert.equal(byKind.weekly.limit, 35);
-  assert.equal(byKind.monthly.used, 46.2);
-  assert.equal(byKind.monthly.limit, 70);
+  assert.equal(byKind['5h'].used, 0.27);
+  assert.equal(byKind['5h'].limit, 12);
+  assert.equal(byKind['5h'].remaining, 11.73);
+  assert.equal(byKind.weekly.used, 6.06);
+  assert.equal(byKind.weekly.limit, 30);
+  assert.equal(byKind.monthly.used, 19.26);
+  assert.equal(byKind.monthly.limit, 60);
   assert.ok(Math.abs(byKind['5h'].resetsAt - (now + 3 * 3600000)) < 2000);
+  // 月度无 resetsAt → 取 access.endsAt
+  assert.ok(Math.abs(byKind.monthly.resetsAt - (now + 20 * 86400000)) < 2000);
+});
+
+test('parseQuotaStatus accepts legacy top-level meters shape', () => {
+  const now = Date.now();
+  const iso = (ms) => new Date(ms).toISOString();
+  const quota = parseQuotaStatus({
+    meters: {
+      fiveHour: { usedMicroCents: 3080000, limitMicroCents: 1200000000, resetsAt: iso(now + 3 * 3600000) },
+      week: { usedMicroCents: '5600000', limitMicroCents: '3000000000', resetsAt: iso(now + 2 * 86400000) },
+      month: { usedMicroCents: 4620000, limitMicroCents: 6000000000, resetsAt: iso(now + 20 * 86400000) }
+    },
+    endsAt: iso(now + 20 * 86400000)
+  }, now);
+  assert.ok(quota);
+  assert.equal(quota.windows.length, 3);
+  const byKind = {};
+  quota.windows.forEach((w) => { byKind[w.kind] = w; });
+  assert.equal(byKind['5h'].used, 0.03);
+  assert.equal(byKind['5h'].limit, 12);
+  assert.equal(byKind['5h'].remaining, 11.97);
+  assert.equal(byKind.weekly.used, 0.06);
+  assert.equal(byKind.weekly.limit, 30);
+  assert.equal(byKind.monthly.used, 0.05);
+  assert.equal(byKind.monthly.limit, 60);
 });
 
 test('parseQuotaStatus falls back to endsAt for monthly reset and skips zero-limit meters', () => {

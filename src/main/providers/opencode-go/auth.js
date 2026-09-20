@@ -98,19 +98,21 @@ function isAuthPath(pathname) {
   return /\/(auth|login|signup)($|\/|\?)/.test(String(pathname || ''));
 }
 
-// 在页面上下文里调同源 /api/go/status(自动带 partition 的登录 cookie),
+// 在页面上下文里调同源 /console/api/go/status(自动带 partition 的登录 cookie),
 // 比 DOM 抓取更稳:新版页面用量仪表直接由该接口渲染。
-function apiStatusScript() {
+// 必须带 x-org-id 头(路由里的 org/wrk id),否则接口回 400 BadRequest。
+function apiStatusScript(orgId) {
   return '(() => fetch(' + JSON.stringify(GO_STATUS_PATH) +
-    ', { headers: { accept: "application/json" }, credentials: "same-origin" })' +
+    ', { headers: { accept: "application/json", "x-org-id": ' + JSON.stringify(String(orgId || '')) +
+    ' }, credentials: "same-origin" })' +
     '.then(async (r) => ({ status: r.status, body: await r.text() }))' +
     '.catch((e) => ({ error: String((e && e.message) || e) })))()';
 }
 
-async function fetchStatusJson(win) {
+async function fetchStatusJson(win, orgId) {
   let raw = null;
   try {
-    raw = await win.webContents.executeJavaScript(apiStatusScript());
+    raw = await win.webContents.executeJavaScript(apiStatusScript(orgId));
   } catch (e) {
     return { error: String((e && e.message) || e) };
   }
@@ -122,6 +124,27 @@ async function fetchStatusJson(win) {
     try { body = JSON.parse(body); } catch (e) { return { status: raw.status, error: 'invalid json' }; }
   }
   return { status: raw.status, body: body };
+}
+
+// 带重试的状态抓取:页面刚加载时组织上下文可能还没就绪,接口会短暂 400,
+// 等一会儿重试通常就好。401/403 直接返回(调用方判过期),不再重试。
+async function fetchStatusWithRetry(win, logger, orgId, attempts, gapMs) {
+  let last = { error: 'empty' };
+  const rounds = Math.max(1, attempts || 3);
+  for (let i = 0; i < rounds; i++) {
+    let res = null;
+    try {
+      res = await fetchStatusJson(win, orgId);
+    } catch (e) {
+      res = { error: String((e && e.message) || e) };
+    }
+    if (res.unauthorized) return res;
+    if (res.body && parseQuotaStatus(res.body)) return res;
+    last = res;
+    if (logger) logger.log('[opencode-go] status not ready, retrying (' + (i + 1) + '/' + rounds + ')');
+    if (i < rounds - 1) await new Promise((resolve) => setTimeout(resolve, gapMs || 2500));
+  }
+  return last;
 }
 
 // 等待地址栏进入 <org>/go。allowAuth=true 时(登录流程)不把登录页判为过期,只管等。
@@ -203,7 +226,7 @@ function captureSession(ctx) {
       workspaceID = gate.workspaceID;
       let api = null;
       try {
-        api = await fetchStatusJson(win);
+        api = await fetchStatusWithRetry(win, logger, workspaceID, 5, 2500);
       } catch (e) {
         api = { error: String((e && e.message) || e) };
       }
@@ -267,7 +290,7 @@ async function fetchQuota(ctx) {
     if (gate.expired) {
       throw new Error('OpenCode Go 登录已过期,请重新登录');
     }
-    const api = await fetchStatusJson(win);
+    const api = await fetchStatusWithRetry(win, logger, workspaceID, 4, 2500);
     if (api.unauthorized) {
       throw new Error('OpenCode Go 登录已过期,请重新登录');
     }
